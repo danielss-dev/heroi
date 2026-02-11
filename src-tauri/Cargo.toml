@@ -1,0 +1,25 @@
+[package]
+name = "heroi"
+version = "0.1.0"
+description = "Local Agent Orchestrator"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "heroi_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-store = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-pty = "0.2"
+tauri-plugin-fs = "2"
+git2 = "0.19"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process"] }
