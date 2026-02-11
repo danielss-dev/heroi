@@ -8,158 +8,238 @@ import "@xterm/xterm/css/xterm.css";
 import { useAppStore } from "../../stores/useAppStore";
 import { getAgentById, getAgentArgs } from "../../lib/agents";
 
-// Module-level PTY state
-let activePty: IPty | null = null;
-let activeDisposers: Array<{ dispose: () => void }> = [];
+// ---------------------------------------------------------------------------
+// Multi-session terminal architecture
+// ---------------------------------------------------------------------------
 
-function killPty() {
-  activeDisposers.forEach((d) => {
-    try { d.dispose(); } catch { /* ignore */ }
-  });
-  activeDisposers = [];
-  if (activePty !== null) {
-    try { activePty.kill(); } catch { /* ignore */ }
-    activePty = null;
+interface TerminalSession {
+  key: string; // worktree path
+  worktreePath: string;
+  agentId: string;
+  pty: IPty | null;
+  terminal: Terminal;
+  fitAddon: FitAddon;
+  containerEl: HTMLDivElement;
+  disposers: Array<{ dispose: () => void }>;
+  status: "running" | "exited";
+}
+
+const sessions = new Map<string, TerminalSession>();
+let activeSessionKey: string | null = null;
+
+const TERM_OPTIONS = {
+  cursorBlink: true,
+  convertEol: true,
+  fontSize: 13,
+  fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
+  theme: {
+    background: "#09090b",
+    foreground: "#e4e4e7",
+    cursor: "#e4e4e7",
+    selectionBackground: "#6366f140",
+    black: "#18181b",
+    red: "#ef4444",
+    green: "#22c55e",
+    yellow: "#eab308",
+    blue: "#6366f1",
+    magenta: "#a855f7",
+    cyan: "#06b6d4",
+    white: "#e4e4e7",
+    brightBlack: "#52525b",
+    brightRed: "#f87171",
+    brightGreen: "#4ade80",
+    brightYellow: "#facc15",
+    brightBlue: "#818cf8",
+    brightMagenta: "#c084fc",
+    brightCyan: "#22d3ee",
+    brightWhite: "#fafafa",
+  },
+  allowProposedApi: true,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Session lifecycle helpers
+// ---------------------------------------------------------------------------
+
+function createSession(worktreePath: string, parentEl: HTMLDivElement): TerminalSession {
+  const containerEl = document.createElement("div");
+  containerEl.style.position = "absolute";
+  containerEl.style.inset = "0";
+  containerEl.style.display = "none"; // hidden until showSession
+  parentEl.appendChild(containerEl);
+
+  const terminal = new Terminal(TERM_OPTIONS);
+  const fitAddon = new FitAddon();
+  const webLinksAddon = new WebLinksAddon();
+  terminal.loadAddon(fitAddon);
+  terminal.loadAddon(webLinksAddon);
+  terminal.open(containerEl);
+
+  const session: TerminalSession = {
+    key: worktreePath,
+    worktreePath,
+    agentId: "",
+    pty: null,
+    terminal,
+    fitAddon,
+    containerEl,
+    disposers: [],
+    status: "exited",
+  };
+
+  sessions.set(worktreePath, session);
+  return session;
+}
+
+function showSession(key: string) {
+  // Hide all session containers
+  for (const [k, s] of sessions) {
+    s.containerEl.style.display = k === key ? "" : "none";
+  }
+
+  activeSessionKey = key;
+
+  const session = sessions.get(key);
+  if (session) {
+    requestAnimationFrame(() => {
+      try {
+        session.fitAddon.fit();
+      } catch {
+        /* ignore */
+      }
+      session.terminal.focus();
+    });
   }
 }
 
-function spawnInWorktree(
+function killSessionPty(session: TerminalSession) {
+  session.disposers.forEach((d) => {
+    try {
+      d.dispose();
+    } catch {
+      /* ignore */
+    }
+  });
+  session.disposers = [];
+
+  if (session.pty !== null) {
+    try {
+      session.pty.kill();
+    } catch {
+      /* ignore */
+    }
+    session.pty = null;
+  }
+  session.status = "exited";
+}
+
+function spawnInSession(
+  session: TerminalSession,
   command: string,
   args: string[],
-  cwd: string,
-  term: Terminal,
-  spawnKeyRef: React.MutableRefObject<string | null>,
-  key: string
+  agentId: string
 ) {
-  killPty();
-  term.clear();
-  term.reset();
-  spawnKeyRef.current = key;
+  killSessionPty(session);
+  session.terminal.clear();
+  session.terminal.reset();
+  session.agentId = agentId;
 
   try {
     const pty = spawn(command, args, {
-      cols: term.cols,
-      rows: term.rows,
-      cwd,
+      cols: session.terminal.cols,
+      rows: session.terminal.rows,
+      cwd: session.worktreePath,
       env: { TERM: "xterm-256color" },
     });
 
-    activePty = pty;
+    session.pty = pty;
+    session.status = "running";
 
     // PTY output -> Terminal
     const dataDisp = pty.onData((data) => {
-      term.write(new Uint8Array(data));
+      session.terminal.write(new Uint8Array(data));
     });
-    activeDisposers.push(dataDisp);
+    session.disposers.push(dataDisp);
 
     // PTY exit
     const exitDisp = pty.onExit(({ exitCode }) => {
-      term.write(
+      session.terminal.write(
         `\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m\r\n`
       );
-      if (activePty === pty) {
-        activePty = null;
-        spawnKeyRef.current = null;
+      if (session.pty === pty) {
+        session.pty = null;
+        session.status = "exited";
       }
     });
-    activeDisposers.push(exitDisp);
+    session.disposers.push(exitDisp);
 
     // Terminal input -> PTY
-    const inputDisp = term.onData((data) => {
+    const inputDisp = session.terminal.onData((data) => {
       pty.write(data);
     });
-    activeDisposers.push(inputDisp);
+    session.disposers.push(inputDisp);
 
     // Terminal resize -> PTY
-    const resizeDisp = term.onResize((e) => {
+    const resizeDisp = session.terminal.onResize((e) => {
       pty.resize(e.cols, e.rows);
     });
-    activeDisposers.push(resizeDisp);
+    session.disposers.push(resizeDisp);
 
-    term.focus();
+    session.terminal.focus();
   } catch (err) {
-    term.write(`\x1b[31mFailed to spawn "${command}": ${err}\x1b[0m\r\n`);
-    term.write(`\x1b[90mMake sure "${command}" is installed and in your PATH.\x1b[0m\r\n`);
-    spawnKeyRef.current = null;
+    session.terminal.write(
+      `\x1b[31mFailed to spawn "${command}": ${err}\x1b[0m\r\n`
+    );
+    session.terminal.write(
+      `\x1b[90mMake sure "${command}" is installed and in your PATH.\x1b[0m\r\n`
+    );
+    session.status = "exited";
   }
 }
 
+function destroySession(key: string) {
+  const session = sessions.get(key);
+  if (!session) return;
+  killSessionPty(session);
+  session.terminal.dispose();
+  session.containerEl.remove();
+  sessions.delete(key);
+  if (activeSessionKey === key) activeSessionKey = null;
+}
+
+function destroyAllSessions() {
+  for (const key of [...sessions.keys()]) {
+    destroySession(key);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// React component
+// ---------------------------------------------------------------------------
+
 export function XtermTerminal() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const spawnKeyRef = useRef<string | null>(null);
+  const prevWorktreePathRef = useRef<string | null>(null);
 
   const selectedWorktree = useAppStore((s) => s.selectedWorktree);
   const selectedAgentId = useAppStore((s) => s.selectedAgentId);
   const agents = useAppStore((s) => s.agents);
-  const agentArgsConfig = useAppStore((s) => s.settings.agentArgs);
 
-  // Initialize xterm once
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const term = new Terminal({
-      cursorBlink: true,
-      convertEol: true,
-      fontSize: 13,
-      fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
-      theme: {
-        background: "#09090b",
-        foreground: "#e4e4e7",
-        cursor: "#e4e4e7",
-        selectionBackground: "#6366f140",
-        black: "#18181b",
-        red: "#ef4444",
-        green: "#22c55e",
-        yellow: "#eab308",
-        blue: "#6366f1",
-        magenta: "#a855f7",
-        cyan: "#06b6d4",
-        white: "#e4e4e7",
-        brightBlack: "#52525b",
-        brightRed: "#f87171",
-        brightGreen: "#4ade80",
-        brightYellow: "#facc15",
-        brightBlue: "#818cf8",
-        brightMagenta: "#c084fc",
-        brightCyan: "#22d3ee",
-        brightWhite: "#fafafa",
-      },
-      allowProposedApi: true,
-    });
-
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-    term.loadAddon(fitAddon);
-    term.loadAddon(webLinksAddon);
-
-    term.open(containerRef.current);
-    requestAnimationFrame(() => {
-      try { fitAddon.fit(); } catch { /* ignore */ }
-    });
-
-    terminalRef.current = term;
-    fitAddonRef.current = fitAddon;
-
-    return () => {
-      killPty();
-      term.dispose();
-      terminalRef.current = null;
-      fitAddonRef.current = null;
-      spawnKeyRef.current = null;
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Handle container resize — fit xterm to container
+  // Effect 1: ResizeObserver — fit only active session
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     const observer = new ResizeObserver(() => {
-      const fit = fitAddonRef.current;
-      if (fit) {
-        try { fit.fit(); } catch { /* ignore */ }
+      if (activeSessionKey) {
+        const session = sessions.get(activeSessionKey);
+        if (session) {
+          try {
+            session.fitAddon.fit();
+          } catch {
+            /* ignore */
+          }
+        }
       }
     });
 
@@ -167,41 +247,83 @@ export function XtermTerminal() {
     return () => observer.disconnect();
   }, []);
 
-  // Spawn PTY when worktree or agent changes
+  // Effect 2: Watch selectedWorktree + selectedAgentId
+  // Show existing session or create new one; respawn only if agent changed or no PTY.
+  // When switching worktrees, restore the session's agent rather than respawning.
   useEffect(() => {
-    const term = terminalRef.current;
-    if (!selectedWorktree || !term) return;
+    const parentEl = containerRef.current;
+    if (!selectedWorktree || !parentEl) return;
 
     const agent = getAgentById(agents, selectedAgentId);
     if (!agent) return;
 
-    const settings = useAppStore.getState().settings;
-    const args = getAgentArgs(agent, settings);
-    const key = `${selectedWorktree.path}::${selectedAgentId}`;
-    if (spawnKeyRef.current === key) return;
+    const key = selectedWorktree.path;
+    const worktreeChanged = prevWorktreePathRef.current !== key;
+    prevWorktreePathRef.current = key;
 
-    spawnInWorktree(agent.command, args, selectedWorktree.path, term, spawnKeyRef, key);
-  }, [selectedWorktree, selectedAgentId, agents, agentArgsConfig]);
+    let session = sessions.get(key);
 
-  // "Run" button forces respawn
+    if (!session) {
+      // First time visiting this worktree — create session and spawn
+      session = createSession(key, parentEl);
+      showSession(key);
+      const settings = useAppStore.getState().settings;
+      const args = getAgentArgs(agent, settings);
+      spawnInSession(session, agent.command, args, selectedAgentId);
+      return;
+    }
+
+    // Session exists — show it
+    showSession(key);
+
+    // If we got here because the user switched worktrees and the session
+    // already has an agent running, restore the dropdown to match the
+    // session's agent instead of killing the running process.
+    if (worktreeChanged && session.agentId && session.agentId !== selectedAgentId) {
+      useAppStore.getState().setSelectedAgentId(session.agentId);
+      return;
+    }
+
+    // Respawn if the agent was explicitly changed on this worktree, or if PTY exited
+    if (session.agentId !== selectedAgentId || session.pty === null) {
+      const settings = useAppStore.getState().settings;
+      const args = getAgentArgs(agent, settings);
+      spawnInSession(session, agent.command, args, selectedAgentId);
+    }
+  }, [selectedWorktree, selectedAgentId, agents]);
+
+  // Effect 3: "Run" button forces respawn in current session
   useEffect(() => {
     const handler = () => {
-      const term = terminalRef.current;
       const state = useAppStore.getState();
-      const { selectedWorktree: worktree, selectedAgentId: agentId, agents: agentsList, settings } = state;
-      if (!term || !worktree) return;
+      const {
+        selectedWorktree: worktree,
+        selectedAgentId: agentId,
+        agents: agentsList,
+        settings,
+      } = state;
+      if (!worktree) return;
+
+      const key = worktree.path;
+      const session = sessions.get(key);
+      if (!session) return;
 
       const agent = getAgentById(agentsList, agentId);
       if (!agent) return;
 
       const args = getAgentArgs(agent, settings);
-      spawnKeyRef.current = null;
-      const key = `${worktree.path}::${agentId}`;
-      spawnInWorktree(agent.command, args, worktree.path, term, spawnKeyRef, key);
+      spawnInSession(session, agent.command, args, agentId);
     };
 
     window.addEventListener("heroi:respawn-agent", handler);
     return () => window.removeEventListener("heroi:respawn-agent", handler);
+  }, []);
+
+  // Effect 4: Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      destroyAllSessions();
+    };
   }, []);
 
   return (

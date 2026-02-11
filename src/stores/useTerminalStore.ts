@@ -5,6 +5,7 @@ export interface PtySession {
   worktreePath: string;
   agentId: string;
   pid: number;
+  status: "running" | "exited";
 }
 
 interface TerminalState {
@@ -14,6 +15,10 @@ interface TerminalState {
   setSession: (worktreePath: string, session: PtySession) => void;
   removeSession: (worktreePath: string) => void;
   setActiveSession: (id: string | null) => void;
+  updateSessionStatus: (
+    worktreePath: string,
+    status: "running" | "exited"
+  ) => void;
 }
 
 export const useTerminalStore = create<TerminalState>((set) => ({
@@ -31,4 +36,15 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       return { sessions: rest };
     }),
   setActiveSession: (id) => set({ activeSessionId: id }),
+  updateSessionStatus: (worktreePath, status) =>
+    set((s) => {
+      const session = s.sessions[worktreePath];
+      if (!session) return s;
+      return {
+        sessions: {
+          ...s.sessions,
+          [worktreePath]: { ...session, status },
+        },
+      };
+    }),
 }));
