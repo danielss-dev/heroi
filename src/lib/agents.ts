@@ -1,40 +1,44 @@
 import type { AgentDef } from "../types";
 
 // Fallback agent definitions in case backend is not available
+const isWindows = navigator.platform.includes("Win");
+const shell = isWindows ? "powershell.exe" : "bash";
+const shellArgs = isWindows ? ["-NoLogo"] : [];
+
 export const DEFAULT_AGENTS: AgentDef[] = [
   {
     id: "claude",
     name: "Claude Code",
-    command: "claude",
-    args: [],
+    command: shell,
+    args: [...shellArgs, "-Command", "claude"],
     description: "Anthropic Claude Code CLI agent",
   },
   {
     id: "codex",
     name: "Codex",
-    command: "codex",
-    args: [],
+    command: shell,
+    args: [...shellArgs, "-Command", "codex"],
     description: "OpenAI Codex CLI agent",
   },
   {
     id: "gemini",
     name: "Gemini CLI",
-    command: "gemini",
-    args: [],
+    command: shell,
+    args: [...shellArgs, "-Command", "gemini"],
     description: "Google Gemini CLI agent",
   },
   {
     id: "aider",
     name: "Aider",
-    command: "aider",
-    args: [],
+    command: shell,
+    args: [...shellArgs, "-Command", "aider"],
     description: "Aider AI pair programming tool",
   },
   {
     id: "shell",
     name: "Shell",
-    command: navigator.platform.includes("Win") ? "powershell.exe" : "bash",
-    args: [],
+    command: shell,
+    args: [...shellArgs],
     description: "Plain terminal shell",
   },
 ];
