@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GitFileStatus, DiffOutput } from "../types";
 import * as tauri from "../lib/tauri";
-import { GIT_POLL_INTERVAL } from "../lib/constants";
+import { useAppStore } from "../stores/useAppStore";
 
 export function useGitStatus(worktreePath: string | null) {
+  const gitPollInterval = useAppStore((s) => s.settings.gitPollInterval);
   const [files, setFiles] = useState<GitFileStatus[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [diff, setDiff] = useState<DiffOutput | null>(null);
@@ -26,11 +27,11 @@ export function useGitStatus(worktreePath: string | null) {
   // Poll git status
   useEffect(() => {
     refresh();
-    intervalRef.current = setInterval(refresh, GIT_POLL_INTERVAL);
+    intervalRef.current = setInterval(refresh, gitPollInterval);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [refresh]);
+  }, [refresh, gitPollInterval]);
 
   // Load diff when file is selected
   useEffect(() => {

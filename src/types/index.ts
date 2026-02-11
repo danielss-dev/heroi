@@ -46,3 +46,15 @@ export interface BranchInfo {
 }
 
 export type IdeType = "vscode" | "cursor" | "zed";
+
+export interface AgentArgsConfig {
+  flags: Record<string, boolean>;
+  extraArgs: string;
+}
+
+export interface Settings {
+  defaultAgentId: string;
+  gitPollInterval: number;
+  defaultIde: IdeType;
+  agentArgs: Record<string, AgentArgsConfig>;
+}

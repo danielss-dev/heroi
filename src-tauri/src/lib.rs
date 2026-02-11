@@ -41,6 +41,8 @@ pub fn run() {
             commands::git::git_unstage_file,
             commands::ide::open_in_ide,
             commands::agents::list_agents,
+            commands::settings::save_settings,
+            commands::settings::load_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

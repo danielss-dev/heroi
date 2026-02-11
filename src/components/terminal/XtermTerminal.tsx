@@ -6,7 +6,7 @@ import { spawn } from "tauri-pty";
 import type { IPty } from "tauri-pty";
 import "@xterm/xterm/css/xterm.css";
 import { useAppStore } from "../../stores/useAppStore";
-import { getAgentById } from "../../lib/agents";
+import { getAgentById, getAgentArgs } from "../../lib/agents";
 
 // Module-level PTY state
 let activePty: IPty | null = null;
@@ -93,6 +93,7 @@ export function XtermTerminal() {
   const selectedWorktree = useAppStore((s) => s.selectedWorktree);
   const selectedAgentId = useAppStore((s) => s.selectedAgentId);
   const agents = useAppStore((s) => s.agents);
+  const agentArgsConfig = useAppStore((s) => s.settings.agentArgs);
 
   // Initialize xterm once
   useEffect(() => {
@@ -174,27 +175,29 @@ export function XtermTerminal() {
     const agent = getAgentById(agents, selectedAgentId);
     if (!agent) return;
 
+    const settings = useAppStore.getState().settings;
+    const args = getAgentArgs(agent, settings);
     const key = `${selectedWorktree.path}::${selectedAgentId}`;
     if (spawnKeyRef.current === key) return;
 
-    spawnInWorktree(agent.command, agent.args, selectedWorktree.path, term, spawnKeyRef, key);
-  }, [selectedWorktree, selectedAgentId, agents]);
+    spawnInWorktree(agent.command, args, selectedWorktree.path, term, spawnKeyRef, key);
+  }, [selectedWorktree, selectedAgentId, agents, agentArgsConfig]);
 
   // "Run" button forces respawn
   useEffect(() => {
     const handler = () => {
       const term = terminalRef.current;
-      const worktree = useAppStore.getState().selectedWorktree;
-      const agentId = useAppStore.getState().selectedAgentId;
-      const agentsList = useAppStore.getState().agents;
+      const state = useAppStore.getState();
+      const { selectedWorktree: worktree, selectedAgentId: agentId, agents: agentsList, settings } = state;
       if (!term || !worktree) return;
 
       const agent = getAgentById(agentsList, agentId);
       if (!agent) return;
 
+      const args = getAgentArgs(agent, settings);
       spawnKeyRef.current = null;
       const key = `${worktree.path}::${agentId}`;
-      spawnInWorktree(agent.command, agent.args, worktree.path, term, spawnKeyRef, key);
+      spawnInWorktree(agent.command, args, worktree.path, term, spawnKeyRef, key);
     };
 
     window.addEventListener("heroi:respawn-agent", handler);

@@ -1,10 +1,13 @@
-import { FolderGit2 } from "lucide-react";
+import { useState } from "react";
+import { FolderGit2, Settings } from "lucide-react";
 import { useAppStore } from "../../stores/useAppStore";
 import { RepoList } from "./RepoList";
 import { AddRepoButton } from "./AddRepoButton";
+import { SettingsModal } from "../settings/SettingsModal";
 
 export function RepoSidebar() {
   const { repos } = useAppStore();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-panel-bg)] border-r border-[var(--color-panel-border)]">
@@ -19,9 +22,21 @@ export function RepoSidebar() {
         <RepoList repos={repos} />
       </div>
 
-      <div className="border-t border-[var(--color-panel-border)] p-1.5">
+      <div className="flex items-center gap-1 border-t border-[var(--color-panel-border)] p-1.5">
         <AddRepoButton />
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+          title="Settings"
+        >
+          <Settings size={16} />
+        </button>
       </div>
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }

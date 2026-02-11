@@ -1,4 +1,4 @@
-import type { AgentDef } from "../types";
+import type { AgentDef, Settings } from "../types";
 
 // Fallback agent definitions in case backend is not available
 const isWindows = navigator.platform.includes("Win");
@@ -48,4 +48,20 @@ export function getAgentById(
   id: string
 ): AgentDef | undefined {
   return agents.find((a) => a.id === id);
+}
+
+export function getAgentArgs(agent: AgentDef, settings: Settings): string[] {
+  const config = settings.agentArgs[agent.id];
+  if (!config) return agent.args;
+
+  const flagArgs = Object.entries(config.flags)
+    .filter(([, enabled]) => enabled)
+    .map(([flag]) => flag);
+
+  const extraArgs = config.extraArgs
+    .trim()
+    .split(/\s+/)
+    .filter((s) => s.length > 0);
+
+  return [...agent.args, ...flagArgs, ...extraArgs];
 }

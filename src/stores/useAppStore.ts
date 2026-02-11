@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { RepoEntry, WorktreeInfo, AgentDef } from "../types";
+import type { RepoEntry, WorktreeInfo, AgentDef, Settings } from "../types";
+import { DEFAULT_SETTINGS } from "../lib/constants";
 
 interface AppState {
   repos: RepoEntry[];
@@ -8,6 +9,7 @@ interface AppState {
   selectedWorktree: WorktreeInfo | null;
   selectedAgentId: string;
   agents: AgentDef[];
+  settings: Settings;
   leftPanelWidth: number;
   rightPanelWidth: number;
 
@@ -19,6 +21,8 @@ interface AppState {
   selectWorktree: (worktree: WorktreeInfo | null) => void;
   setAgents: (agents: AgentDef[]) => void;
   setSelectedAgentId: (id: string) => void;
+  setSettings: (settings: Settings) => void;
+  updateSettings: (partial: Partial<Settings>) => void;
   setLeftPanelWidth: (width: number) => void;
   setRightPanelWidth: (width: number) => void;
 }
@@ -30,6 +34,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectedWorktree: null,
   selectedAgentId: "shell",
   agents: [],
+  settings: DEFAULT_SETTINGS,
   leftPanelWidth: 260,
   rightPanelWidth: 300,
 
@@ -46,6 +51,16 @@ export const useAppStore = create<AppState>((set) => ({
   selectWorktree: (worktree) => set({ selectedWorktree: worktree }),
   setAgents: (agents) => set({ agents }),
   setSelectedAgentId: (id) => set({ selectedAgentId: id }),
+  setSettings: (settings) =>
+    set({ settings, selectedAgentId: settings.defaultAgentId }),
+  updateSettings: (partial) =>
+    set((s) => {
+      const settings = { ...s.settings, ...partial };
+      return {
+        settings,
+        selectedAgentId: partial.defaultAgentId ?? s.selectedAgentId,
+      };
+    }),
   setLeftPanelWidth: (width) => set({ leftPanelWidth: width }),
   setRightPanelWidth: (width) => set({ rightPanelWidth: width }),
 }));

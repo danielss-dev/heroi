@@ -7,6 +7,7 @@ import type {
   DiffOutput,
   AgentDef,
   IdeType,
+  Settings,
 } from "../types";
 
 export async function addRepo(path: string): Promise<RepoEntry> {
@@ -89,4 +90,12 @@ export async function openInIde(
 
 export async function listAgents(): Promise<AgentDef[]> {
   return invoke("list_agents");
+}
+
+export async function saveSettings(settings: Settings): Promise<void> {
+  return invoke("save_settings", { settings });
+}
+
+export async function loadSettings(): Promise<Settings | null> {
+  return invoke("load_settings");
 }
