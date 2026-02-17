@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="public/heroilogo.png" alt="Heroi Logo" width="128" />
+
 # Heroi
 
 **Local AI Agent Orchestrator**
