@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { FolderGit2, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import { useAppStore } from "../../stores/useAppStore";
 import { RepoList } from "./RepoList";
 import { AddRepoButton } from "./AddRepoButton";
 import { SettingsModal } from "../settings/SettingsModal";
+import heroiLogo from "/heroilogo.png";
 import { WorkspaceSelector } from "../workspace/WorkspaceSelector";
 
 export function RepoSidebar() {
@@ -20,9 +21,9 @@ export function RepoSidebar() {
   return (
     <div className="flex flex-col h-full bg-[var(--color-panel-bg)] border-r border-[var(--color-panel-border)]">
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--color-panel-border)]">
-        <FolderGit2 size={14} className="text-zinc-500" />
+        <img src={heroiLogo} alt="Heroi" className="w-4 h-4 invert" />
         <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-          Repositories
+          Heroi
         </span>
       </div>
 
