@@ -9,11 +9,11 @@ import { useAppStore } from "../../stores/useAppStore";
 import { getAgentById, getAgentArgs } from "../../lib/agents";
 
 // ---------------------------------------------------------------------------
-// Multi-session terminal architecture
+// Multi-session terminal architecture (keyed by tabId)
 // ---------------------------------------------------------------------------
 
 interface TerminalSession {
-  key: string; // worktree path
+  key: string; // tabId
   worktreePath: string;
   agentId: string;
   pty: IPty | null;
@@ -61,11 +61,15 @@ const TERM_OPTIONS = {
 // Session lifecycle helpers
 // ---------------------------------------------------------------------------
 
-function createSession(worktreePath: string, parentEl: HTMLDivElement): TerminalSession {
+function createSession(
+  tabId: string,
+  worktreePath: string,
+  parentEl: HTMLDivElement
+): TerminalSession {
   const containerEl = document.createElement("div");
   containerEl.style.position = "absolute";
   containerEl.style.inset = "0";
-  containerEl.style.display = "none"; // hidden until showSession
+  containerEl.style.display = "none";
   parentEl.appendChild(containerEl);
 
   const terminal = new Terminal(TERM_OPTIONS);
@@ -76,7 +80,7 @@ function createSession(worktreePath: string, parentEl: HTMLDivElement): Terminal
   terminal.open(containerEl);
 
   const session: TerminalSession = {
-    key: worktreePath,
+    key: tabId,
     worktreePath,
     agentId: "",
     pty: null,
@@ -87,12 +91,11 @@ function createSession(worktreePath: string, parentEl: HTMLDivElement): Terminal
     status: "exited",
   };
 
-  sessions.set(worktreePath, session);
+  sessions.set(tabId, session);
   return session;
 }
 
 function showSession(key: string) {
-  // Hide all session containers
   for (const [k, s] of sessions) {
     s.containerEl.style.display = k === key ? "" : "none";
   }
@@ -155,13 +158,11 @@ function spawnInSession(
     session.pty = pty;
     session.status = "running";
 
-    // PTY output -> Terminal
     const dataDisp = pty.onData((data) => {
       session.terminal.write(new Uint8Array(data));
     });
     session.disposers.push(dataDisp);
 
-    // PTY exit
     const exitDisp = pty.onExit(({ exitCode }) => {
       session.terminal.write(
         `\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m\r\n`
@@ -173,13 +174,11 @@ function spawnInSession(
     });
     session.disposers.push(exitDisp);
 
-    // Terminal input -> PTY
     const inputDisp = session.terminal.onData((data) => {
       pty.write(data);
     });
     session.disposers.push(inputDisp);
 
-    // Terminal resize -> PTY
     const resizeDisp = session.terminal.onResize((e) => {
       pty.resize(e.cols, e.rows);
     });
@@ -197,7 +196,7 @@ function spawnInSession(
   }
 }
 
-function destroySession(key: string) {
+export function destroySession(key: string) {
   const session = sessions.get(key);
   if (!session) return;
   killSessionPty(session);
@@ -207,7 +206,7 @@ function destroySession(key: string) {
   if (activeSessionKey === key) activeSessionKey = null;
 }
 
-function destroyAllSessions() {
+export function destroyAllSessions() {
   for (const key of [...sessions.keys()]) {
     destroySession(key);
   }
@@ -219,11 +218,11 @@ function destroyAllSessions() {
 
 export function XtermTerminal() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const prevWorktreePathRef = useRef<string | null>(null);
 
   const selectedWorktree = useAppStore((s) => s.selectedWorktree);
-  const selectedAgentId = useAppStore((s) => s.selectedAgentId);
   const agents = useAppStore((s) => s.agents);
+  const worktreeTabs = useAppStore((s) => s.worktreeTabs);
+  const activeTabId = useAppStore((s) => s.activeTabId);
 
   // Effect 1: ResizeObserver — fit only active session
   useEffect(() => {
@@ -247,79 +246,93 @@ export function XtermTerminal() {
     return () => observer.disconnect();
   }, []);
 
-  // Effect 2: Watch selectedWorktree + selectedAgentId
-  // Show existing session or create new one; respawn only if agent changed or no PTY.
-  // When switching worktrees, restore the session's agent rather than respawning.
+  // Effect 2: Watch selectedWorktree + activeTabId
+  // Show existing session or create new one; spawn agent for the active tab.
   useEffect(() => {
     const parentEl = containerRef.current;
     if (!selectedWorktree || !parentEl) return;
 
-    const agent = getAgentById(agents, selectedAgentId);
+    const worktreePath = selectedWorktree.path;
+    const currentTabId = activeTabId[worktreePath];
+
+    if (!currentTabId) {
+      // No tabs yet for this worktree — auto-create a Shell tab
+      const store = useAppStore.getState();
+      const shellAgent = agents.find((a) => a.id === "shell");
+      if (shellAgent) {
+        store.addTab(worktreePath, "shell", "Shell");
+      }
+      return;
+    }
+
+    const tabs = worktreeTabs[worktreePath] ?? [];
+    const activeTab = tabs.find((t) => t.id === currentTabId);
+    if (!activeTab) return;
+
+    const agent = getAgentById(agents, activeTab.agentId);
     if (!agent) return;
 
-    const key = selectedWorktree.path;
-    const worktreeChanged = prevWorktreePathRef.current !== key;
-    prevWorktreePathRef.current = key;
-
-    let session = sessions.get(key);
+    let session = sessions.get(currentTabId);
 
     if (!session) {
-      // First time visiting this worktree — create session and spawn
-      session = createSession(key, parentEl);
-      showSession(key);
+      // First time visiting this tab — create session and spawn
+      session = createSession(currentTabId, worktreePath, parentEl);
+      showSession(currentTabId);
       const settings = useAppStore.getState().settings;
       const args = getAgentArgs(agent, settings);
-      spawnInSession(session, agent.command, args, selectedAgentId);
+      spawnInSession(session, agent.command, args, activeTab.agentId);
       return;
     }
 
     // Session exists — show it
-    showSession(key);
+    showSession(currentTabId);
 
-    // If we got here because the user switched worktrees and the session
-    // already has an agent running, restore the dropdown to match the
-    // session's agent instead of killing the running process.
-    if (worktreeChanged && session.agentId && session.agentId !== selectedAgentId) {
-      useAppStore.getState().setSelectedAgentId(session.agentId);
-      return;
-    }
-
-    // Respawn if the agent was explicitly changed on this worktree, or if PTY exited
-    if (session.agentId !== selectedAgentId || session.pty === null) {
+    // Respawn if PTY exited
+    if (session.pty === null) {
       const settings = useAppStore.getState().settings;
       const args = getAgentArgs(agent, settings);
-      spawnInSession(session, agent.command, args, selectedAgentId);
+      spawnInSession(session, agent.command, args, activeTab.agentId);
     }
-  }, [selectedWorktree, selectedAgentId, agents]);
+  }, [selectedWorktree, activeTabId, worktreeTabs, agents]);
 
   // Effect 3: "Run" button forces respawn in current session
   useEffect(() => {
     const handler = () => {
       const state = useAppStore.getState();
-      const {
-        selectedWorktree: worktree,
-        selectedAgentId: agentId,
-        agents: agentsList,
-        settings,
-      } = state;
+      const { selectedWorktree: worktree, agents: agentsList, settings } = state;
       if (!worktree) return;
 
-      const key = worktree.path;
-      const session = sessions.get(key);
+      const worktreePath = worktree.path;
+      const currentTabId = state.activeTabId[worktreePath];
+      if (!currentTabId) return;
+
+      const tabs = state.worktreeTabs[worktreePath] ?? [];
+      const activeTab = tabs.find((t) => t.id === currentTabId);
+      if (!activeTab) return;
+
+      const session = sessions.get(currentTabId);
       if (!session) return;
 
-      const agent = getAgentById(agentsList, agentId);
+      const agent = getAgentById(agentsList, activeTab.agentId);
       if (!agent) return;
 
       const args = getAgentArgs(agent, settings);
-      spawnInSession(session, agent.command, args, agentId);
+      spawnInSession(session, agent.command, args, activeTab.agentId);
     };
 
     window.addEventListener("heroi:respawn-agent", handler);
     return () => window.removeEventListener("heroi:respawn-agent", handler);
   }, []);
 
-  // Effect 4: Cleanup on unmount
+  // Effect 4: Listen for destroy-all-sessions (workspace switching)
+  useEffect(() => {
+    const handler = () => destroyAllSessions();
+    window.addEventListener("heroi:destroy-all-sessions", handler);
+    return () =>
+      window.removeEventListener("heroi:destroy-all-sessions", handler);
+  }, []);
+
+  // Effect 5: Cleanup on unmount
   useEffect(() => {
     return () => {
       destroyAllSessions();

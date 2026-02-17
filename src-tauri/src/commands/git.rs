@@ -1,4 +1,5 @@
 use git2::{DiffOptions, Repository, StatusOptions};
+use std::process::Command;
 
 use crate::models::git::{DiffOutput, FileState, GitFileStatus};
 
@@ -194,4 +195,128 @@ pub fn git_unstage_file(worktree_path: String, file_path: String) -> Result<(), 
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn git_stage_all(worktree_path: String) -> Result<(), String> {
+    let repo =
+        Repository::open(&worktree_path).map_err(|e| format!("Failed to open repo: {}", e))?;
+
+    let mut index = repo.index().map_err(|e| format!("Failed to get index: {}", e))?;
+
+    index
+        .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+        .map_err(|e| format!("Failed to stage all: {}", e))?;
+
+    // Also handle deleted files
+    index
+        .update_all(["*"].iter(), None)
+        .map_err(|e| format!("Failed to update index: {}", e))?;
+
+    index
+        .write()
+        .map_err(|e| format!("Failed to write index: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn git_unstage_all(worktree_path: String) -> Result<(), String> {
+    let repo =
+        Repository::open(&worktree_path).map_err(|e| format!("Failed to open repo: {}", e))?;
+
+    let head = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+
+    match head {
+        Some(commit) => {
+            repo.reset(
+                commit.as_object(),
+                git2::ResetType::Mixed,
+                None,
+            )
+            .map_err(|e| format!("Failed to unstage all: {}", e))?;
+        }
+        None => {
+            // No commits yet — clear the index
+            let mut index = repo.index().map_err(|e| format!("Failed to get index: {}", e))?;
+            index.clear().map_err(|e| format!("Failed to clear index: {}", e))?;
+            index.write().map_err(|e| format!("Failed to write index: {}", e))?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn git_commit(worktree_path: String, message: String) -> Result<String, String> {
+    let repo =
+        Repository::open(&worktree_path).map_err(|e| format!("Failed to open repo: {}", e))?;
+
+    let sig = repo
+        .signature()
+        .map_err(|e| format!("Failed to get signature: {}", e))?;
+
+    let mut index = repo.index().map_err(|e| format!("Failed to get index: {}", e))?;
+    let tree_oid = index
+        .write_tree()
+        .map_err(|e| format!("Failed to write tree: {}", e))?;
+    let tree = repo
+        .find_tree(tree_oid)
+        .map_err(|e| format!("Failed to find tree: {}", e))?;
+
+    let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let parents: Vec<&git2::Commit> = parent.as_ref().map(|p| vec![p]).unwrap_or_default();
+
+    let oid = repo
+        .commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)
+        .map_err(|e| format!("Failed to commit: {}", e))?;
+
+    Ok(oid.to_string())
+}
+
+#[tauri::command]
+pub fn git_push(worktree_path: String) -> Result<(), String> {
+    let output = Command::new("git")
+        .arg("push")
+        .current_dir(&worktree_path)
+        .output()
+        .map_err(|e| format!("Failed to run git push: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git push failed: {}", stderr));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn git_ahead_count(worktree_path: String) -> Result<usize, String> {
+    let repo =
+        Repository::open(&worktree_path).map_err(|e| format!("Failed to open repo: {}", e))?;
+
+    let head = repo.head().map_err(|e| format!("Failed to get HEAD: {}", e))?;
+    let local_oid = head
+        .target()
+        .ok_or_else(|| "HEAD has no target".to_string())?;
+
+    let branch_name = head
+        .shorthand()
+        .ok_or_else(|| "Could not get branch name".to_string())?;
+
+    let upstream_ref = format!("refs/remotes/origin/{}", branch_name);
+    let upstream = match repo.find_reference(&upstream_ref) {
+        Ok(r) => r,
+        Err(_) => return Ok(0), // No upstream tracked
+    };
+
+    let upstream_oid = upstream
+        .target()
+        .ok_or_else(|| "Upstream has no target".to_string())?;
+
+    let (ahead, _behind) = repo
+        .graph_ahead_behind(local_oid, upstream_oid)
+        .map_err(|e| format!("Failed to compute ahead/behind: {}", e))?;
+
+    Ok(ahead)
 }

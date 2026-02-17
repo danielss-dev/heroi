@@ -58,3 +58,22 @@ export interface Settings {
   defaultIde: IdeType;
   agentArgs: Record<string, AgentArgsConfig>;
 }
+
+export interface AgentTab {
+  id: string;
+  agentId: string;
+  label: string;
+  worktreePath: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  repoPaths: string[];
+  worktreeTabs: Record<string, AgentTab[]>;
+  activeTabId: Record<string, string>;
+  selectedRepo: string | null;
+  selectedWorktreePath: string | null;
+  leftPanelWidth: number;
+  rightPanelWidth: number;
+}
