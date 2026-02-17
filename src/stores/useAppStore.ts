@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import { DEFAULT_SETTINGS } from "../lib/constants";
 
-export type RightPanel = "git" | "diff" | "files" | "scripts";
+export type RightPanel = "git" | "files" | "scripts";
 
 interface AppState {
   repos: RepoEntry[];

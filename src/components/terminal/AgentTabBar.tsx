@@ -3,9 +3,10 @@ import { X, Plus, Bot, Terminal as TerminalIcon } from "lucide-react";
 import { useAppStore } from "../../stores/useAppStore";
 import { destroySession, getSessionStatus } from "./XtermTerminal";
 
-function agentIcon(agentId: string) {
-  if (agentId === "shell") return <TerminalIcon size={11} />;
-  return <Bot size={11} />;
+function agentIcon(agentId: string, isActive: boolean) {
+  const className = isActive ? "text-zinc-300" : "text-zinc-500";
+  if (agentId === "shell") return <TerminalIcon size={12} className={className} />;
+  return <Bot size={12} className={className} />;
 }
 
 export function AgentTabBar() {
@@ -47,60 +48,89 @@ export function AgentTabBar() {
     e.stopPropagation();
     destroySession(tabId);
     removeTab(worktreePath, tabId);
+
+    // If that was the last tab, auto-create a new Shell tab
+    const remainingTabs = (worktreeTabs[worktreePath] ?? []).filter(
+      (t) => t.id !== tabId
+    );
+    if (remainingTabs.length === 0) {
+      const shellAgent = agents.find((a) => a.id === "shell");
+      if (shellAgent) {
+        addTab(worktreePath, "shell", "Shell");
+      }
+    }
   };
 
   return (
-    <div className="flex items-center bg-[#0c0c0e] border-b border-zinc-800 px-1 min-h-[32px]">
-      <div className="flex items-center gap-0.5 flex-1 overflow-x-auto">
+    <div className="flex items-center bg-zinc-950 border-b border-zinc-800/80 pl-1 pr-1.5 h-[36px] gap-0.5">
+      {/* Scrollable tab strip */}
+      <div className="flex items-center gap-[3px] flex-1 overflow-x-auto scrollbar-none py-[5px]">
         {tabs.map((tab) => {
           const isActive = tab.id === currentActiveTabId;
           const sessionStatus = getSessionStatus(tab.id);
+          const isRunning = sessionStatus === "running";
+
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(worktreePath, tab.id)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] rounded-t-md transition-colors whitespace-nowrap ${
+              className={`group flex items-center gap-1.5 pl-2.5 pr-1.5 h-[26px] text-[11px] font-medium rounded-md transition-all duration-150 whitespace-nowrap select-none ${
                 isActive
-                  ? "bg-[#09090b] text-zinc-200 border-t-2 border-indigo-500"
-                  : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+                  ? "bg-zinc-800 text-zinc-200 shadow-sm shadow-black/20"
+                  : "text-zinc-500 hover:text-zinc-400 hover:bg-zinc-800/40"
               }`}
             >
-              {sessionStatus === "running" ? (
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
-              ) : (
-                agentIcon(tab.agentId)
-              )}
-              <span>{tab.label}</span>
-              {tabs.length > 1 && (
-                <span
-                  onClick={(e) => handleCloseTab(e, tab.id)}
-                  className="ml-1 p-0.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300"
-                >
-                  <X size={10} />
+              {/* Status indicator / icon */}
+              {isRunning ? (
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-50" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
+              ) : (
+                agentIcon(tab.agentId, isActive)
               )}
+
+              {/* Label */}
+              <span className="leading-none">{tab.label}</span>
+
+              {/* Close button - always visible on active, hover-reveal on inactive */}
+              <span
+                onClick={(e) => handleCloseTab(e, tab.id)}
+                className={`ml-0.5 p-[3px] rounded transition-all duration-100 ${
+                  isActive
+                    ? "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700"
+                    : "opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-700"
+                }`}
+              >
+                <X size={10} strokeWidth={2.5} />
+              </span>
             </button>
           );
         })}
       </div>
 
-      <div ref={pickerRef} className="relative shrink-0 ml-1">
+      {/* Add tab button */}
+      <div ref={pickerRef} className="relative shrink-0">
         <button
           onClick={() => setPickerOpen(!pickerOpen)}
-          className="p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded transition-colors"
-          title="Add agent tab"
+          className="flex items-center justify-center w-[24px] h-[24px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors"
+          title="New tab"
         >
-          <Plus size={13} />
+          <Plus size={14} strokeWidth={2} />
         </button>
         {pickerOpen && (
-          <div className="absolute top-full right-0 mt-1 z-50 min-w-[160px] bg-zinc-900 border border-zinc-700 rounded-md shadow-xl py-1">
+          <div className="absolute top-full right-0 mt-1.5 z-50 min-w-[170px] bg-zinc-900 border border-zinc-700/80 rounded-lg shadow-xl shadow-black/30 py-1 overflow-hidden">
             {agents.map((agent) => (
               <button
                 key={agent.id}
                 onClick={() => handleAddTab(agent.id)}
-                className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-left text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+                className="flex items-center gap-2.5 w-full px-3 py-1.5 text-[12px] text-left text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
               >
-                {agentIcon(agent.id)}
+                {agent.id === "shell" ? (
+                  <TerminalIcon size={12} className="text-zinc-500" />
+                ) : (
+                  <Bot size={12} className="text-zinc-500" />
+                )}
                 {agent.name}
               </button>
             ))}

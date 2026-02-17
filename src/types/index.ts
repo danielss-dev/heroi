@@ -47,6 +47,8 @@ export interface BranchInfo {
 
 export type IdeType = "vscode" | "cursor" | "zed";
 
+export type ShellType = "bash" | "zsh" | "fish" | "sh" | "powershell" | "cmd";
+
 export interface AgentArgsConfig {
   flags: Record<string, boolean>;
   extraArgs: string;
@@ -65,6 +67,7 @@ export interface Settings {
   defaultAgentId: string;
   gitPollInterval: number;
   defaultIde: IdeType;
+  defaultShell: ShellType;
   agentArgs: Record<string, AgentArgsConfig>;
   providers: ProviderConfig[];
 }

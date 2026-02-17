@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { AppLayout } from "./components/layout/AppLayout";
 import { useAppStore } from "./stores/useAppStore";
 import { listAgents, loadSettings, loadWorkspaces } from "./lib/tauri";
-import { DEFAULT_AGENTS } from "./lib/agents";
+import { DEFAULT_AGENTS, buildAgents } from "./lib/agents";
 import { DEFAULT_SETTINGS } from "./lib/constants";
 import type { LegacyWorkspace, Workspace } from "./types";
 
@@ -57,7 +57,12 @@ function App() {
     loadSettings()
       .then((stored) => {
         if (stored) {
-          setSettings({ ...DEFAULT_SETTINGS, ...stored });
+          const merged = { ...DEFAULT_SETTINGS, ...stored };
+          setSettings(merged);
+          // Rebuild agents with the configured shell
+          if (merged.defaultShell) {
+            setAgents(buildAgents(merged.defaultShell));
+          }
         }
       })
       .catch(() => {

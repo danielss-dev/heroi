@@ -35,11 +35,21 @@ body,
   background: #52525b;
 }
 
+/* Hide scrollbar utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* xterm.js container */
 .xterm-container {
   position: relative;
   height: 100%;
   width: 100%;
+  overflow: hidden;
 }
 .xterm-container .xterm {
   height: 100%;

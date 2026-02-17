@@ -1,7 +1,6 @@
 import { useCallback, useRef, useEffect } from "react";
 import {
   GitCommitHorizontal,
-  GitCompareArrows,
   FolderOpen,
   ScrollText,
 } from "lucide-react";
@@ -9,7 +8,6 @@ import { RepoSidebar } from "../sidebar/RepoSidebar";
 import { TopBar } from "./TopBar";
 import { TerminalPanel } from "../terminal/TerminalPanel";
 import { GitSidebar } from "../git/GitSidebar";
-import { DiffViewer } from "../diff/DiffViewer";
 import { RunPanel } from "../scripts/RunPanel";
 import { FileBrowser } from "../files/FileBrowser";
 import { useAppStore } from "../../stores/useAppStore";
@@ -21,7 +19,6 @@ const RIGHT_TABS: {
   icon: typeof GitCommitHorizontal;
 }[] = [
   { id: "git", label: "Git", icon: GitCommitHorizontal },
-  { id: "diff", label: "Changes", icon: GitCompareArrows },
   { id: "files", label: "Files", icon: FolderOpen },
   { id: "scripts", label: "Scripts", icon: ScrollText },
 ];
@@ -59,6 +56,11 @@ export function AppLayout() {
         const w = Math.max(200, Math.min(600, rect.right - e.clientX));
         setRightPanelWidth(w);
       }
+
+      // Tell the terminal to refit after the layout updates
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent("heroi:panel-resize"));
+      });
     };
 
     const handleMouseUp = () => {
@@ -126,7 +128,6 @@ export function AppLayout() {
         {/* Right Panel Content */}
         <div className="flex-1 min-h-0 overflow-hidden">
           {rightPanel === "git" && <GitSidebar />}
-          {rightPanel === "diff" && <DiffViewer />}
           {rightPanel === "files" && <FileBrowser />}
           {rightPanel === "scripts" && <RunPanel />}
         </div>

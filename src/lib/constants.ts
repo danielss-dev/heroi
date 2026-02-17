@@ -1,4 +1,4 @@
-import type { Settings, ProviderConfig } from "../types";
+import type { Settings, ProviderConfig, ShellType } from "../types";
 
 export const GIT_POLL_INTERVAL = 3000;
 
@@ -7,6 +7,23 @@ export const IDE_OPTIONS = [
   { id: "cursor" as const, name: "Cursor", icon: "MousePointer" },
   { id: "zed" as const, name: "Zed", icon: "Zap" },
 ];
+
+const isWindows = navigator.platform.includes("Win");
+
+export const SHELL_OPTIONS: { id: ShellType; name: string; available: boolean }[] = isWindows
+  ? [
+      { id: "powershell", name: "PowerShell", available: true },
+      { id: "cmd", name: "Command Prompt", available: true },
+      { id: "bash", name: "Bash (WSL)", available: true },
+    ]
+  : [
+      { id: "zsh", name: "Zsh", available: true },
+      { id: "bash", name: "Bash", available: true },
+      { id: "fish", name: "Fish", available: true },
+      { id: "sh", name: "sh", available: true },
+    ];
+
+export const DEFAULT_SHELL: ShellType = isWindows ? "powershell" : "zsh";
 
 export const DEFAULT_TERMINAL_COLS = 80;
 export const DEFAULT_TERMINAL_ROWS = 24;
@@ -50,6 +67,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultAgentId: "shell",
   gitPollInterval: 3000,
   defaultIde: "vscode",
+  defaultShell: DEFAULT_SHELL,
   agentArgs: {},
   providers: DEFAULT_PROVIDERS,
 };

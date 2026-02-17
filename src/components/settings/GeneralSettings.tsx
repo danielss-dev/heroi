@@ -1,6 +1,6 @@
 import type { Settings } from "../../types";
 import { useAppStore } from "../../stores/useAppStore";
-import { IDE_OPTIONS } from "../../lib/constants";
+import { IDE_OPTIONS, SHELL_OPTIONS } from "../../lib/constants";
 
 interface GeneralSettingsProps {
   draft: Settings;
@@ -44,6 +44,26 @@ export function GeneralSettings({ draft, onChange }: GeneralSettingsProps) {
             </option>
           ))}
         </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+          Default Shell
+        </label>
+        <select
+          value={draft.defaultShell}
+          onChange={(e) => onChange({ defaultShell: e.target.value as Settings["defaultShell"] })}
+          className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-indigo-500"
+        >
+          {SHELL_OPTIONS.map((shell) => (
+            <option key={shell.id} value={shell.id}>
+              {shell.name}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-zinc-500 mt-1">
+          Shell used for terminal tabs and running agents
+        </p>
       </div>
 
       <div>

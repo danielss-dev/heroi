@@ -69,6 +69,7 @@ function createSession(
   const containerEl = document.createElement("div");
   containerEl.style.position = "absolute";
   containerEl.style.inset = "0";
+  containerEl.style.overflow = "hidden";
   containerEl.style.display = "none";
   parentEl.appendChild(containerEl);
 
@@ -329,6 +330,24 @@ export function XtermTerminal() {
     }
   }, [selectedWorktree, activeTabId, worktreeTabs, agents]);
 
+  // Effect 2b: Listen for panel resize events (fired by AppLayout during drag)
+  useEffect(() => {
+    const handler = () => {
+      if (activeSessionKey) {
+        const session = sessions.get(activeSessionKey);
+        if (session) {
+          try {
+            session.fitAddon.fit();
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    };
+    window.addEventListener("heroi:panel-resize", handler);
+    return () => window.removeEventListener("heroi:panel-resize", handler);
+  }, []);
+
   // Effect 3: "Run" button forces respawn in current session
   useEffect(() => {
     const handler = () => {
@@ -374,6 +393,6 @@ export function XtermTerminal() {
   }, []);
 
   return (
-    <div ref={containerRef} className="xterm-container flex-1 min-h-0" />
+    <div ref={containerRef} className="xterm-container flex-1 min-h-0 min-w-0" />
   );
 }
