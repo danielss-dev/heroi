@@ -11,11 +11,11 @@ export function RepoSidebar() {
   const { repos, workspaces, activeWorkspaceId } = useAppStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Filter repos by active workspace if workspaces exist
+  // Filter repos by active workspace's bound repo if workspaces exist
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
   const filteredRepos =
-    activeWorkspace && activeWorkspace.repoPaths.length > 0
-      ? repos.filter((r) => activeWorkspace.repoPaths.includes(r.path))
+    activeWorkspace && activeWorkspace.repoPath
+      ? repos.filter((r) => r.path === activeWorkspace.repoPath)
       : repos;
 
   return (

@@ -1,7 +1,12 @@
 pub mod agents;
+pub mod checkpoints;
+pub mod files;
 pub mod git;
+pub mod github;
 pub mod ide;
 pub mod repos;
+pub mod scripts;
 pub mod settings;
+pub mod workspace_lifecycle;
 pub mod workspaces;
 pub mod worktrees;

@@ -136,6 +136,31 @@ function killSessionPty(session: TerminalSession) {
   session.status = "exited";
 }
 
+function getActiveWorkspaceEnv(): Record<string, string> {
+  const state = useAppStore.getState();
+  const ws = state.workspaces.find((w) => w.id === state.activeWorkspaceId);
+  return ws?.envVars ?? {};
+}
+
+function getProviderEnv(): Record<string, string> {
+  const state = useAppStore.getState();
+  const providers = state.settings.providers ?? [];
+  const env: Record<string, string> = {};
+  for (const provider of providers) {
+    if (provider.enabled && provider.apiKey) {
+      env[provider.envVarName] = provider.apiKey;
+      if (provider.baseUrl) {
+        // Set base URL env var (convention: <PROVIDER>_BASE_URL)
+        const baseUrlKey = provider.envVarName.replace(/_API_KEY$/, "_BASE_URL");
+        if (baseUrlKey !== provider.envVarName) {
+          env[baseUrlKey] = provider.baseUrl;
+        }
+      }
+    }
+  }
+  return env;
+}
+
 function spawnInSession(
   session: TerminalSession,
   command: string,
@@ -147,12 +172,15 @@ function spawnInSession(
   session.terminal.reset();
   session.agentId = agentId;
 
+  const workspaceEnv = getActiveWorkspaceEnv();
+  const providerEnv = getProviderEnv();
+
   try {
     const pty = spawn(command, args, {
       cols: session.terminal.cols,
       rows: session.terminal.rows,
       cwd: session.worktreePath,
-      env: { TERM: "xterm-256color" },
+      env: { TERM: "xterm-256color", ...providerEnv, ...workspaceEnv },
     });
 
     session.pty = pty;
@@ -194,6 +222,12 @@ function spawnInSession(
     );
     session.status = "exited";
   }
+}
+
+export function getSessionStatus(key: string): "running" | "exited" | null {
+  const session = sessions.get(key);
+  if (!session) return null;
+  return session.status;
 }
 
 export function destroySession(key: string) {

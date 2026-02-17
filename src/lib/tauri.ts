@@ -9,6 +9,16 @@ import type {
   IdeType,
   Settings,
   Workspace,
+  WorkspaceConfig,
+  HeroiConfig,
+  ScriptDef,
+  RunningProcess,
+  PrInfo,
+  CheckRun,
+  MergeMethod,
+  DirEntry,
+  FileContent,
+  Checkpoint,
 } from "../types";
 
 export async function addRepo(path: string): Promise<RepoEntry> {
@@ -59,6 +69,27 @@ export async function gitStatus(
 
 export async function gitDiff(worktreePath: string): Promise<string> {
   return invoke("git_diff", { worktreePath });
+}
+
+export async function gitDiffAll(
+  worktreePath: string
+): Promise<DiffOutput[]> {
+  return invoke("git_diff_all", { worktreePath });
+}
+
+export async function gitDiffBase(
+  worktreePath: string,
+  baseBranch: string
+): Promise<DiffOutput[]> {
+  return invoke("git_diff_base", { worktreePath, baseBranch });
+}
+
+export async function gitFileContent(
+  worktreePath: string,
+  filePath: string,
+  refName?: string
+): Promise<string> {
+  return invoke("git_file_content", { worktreePath, filePath, refName });
 }
 
 export async function gitDiffFile(
@@ -144,4 +175,191 @@ export async function loadWorkspaces(): Promise<{
   activeWorkspaceId: string | null;
 }> {
   return invoke("load_workspaces");
+}
+
+// Workspace lifecycle commands (backed by Rust + git worktrees)
+
+export async function createWorkspaceWithWorktree(
+  repoPath: string,
+  name: string,
+  branch?: string,
+  baseBranch?: string
+): Promise<WorkspaceConfig> {
+  return invoke("create_workspace", { repoPath, name, branch, baseBranch });
+}
+
+export async function createWorkspaceForMain(
+  repoPath: string,
+  name: string
+): Promise<WorkspaceConfig> {
+  return invoke("create_workspace_for_main", { repoPath, name });
+}
+
+export async function deleteWorkspaceWithWorktree(
+  workspaceId: string
+): Promise<void> {
+  return invoke("delete_workspace", { workspaceId });
+}
+
+export async function getWorkspaceEnv(
+  workspaceId: string
+): Promise<Record<string, string>> {
+  return invoke("get_workspace_env", { workspaceId });
+}
+
+export async function archiveWorkspace(workspaceId: string): Promise<void> {
+  return invoke("archive_workspace", { workspaceId });
+}
+
+export async function restoreWorkspace(workspaceId: string): Promise<void> {
+  return invoke("restore_workspace", { workspaceId });
+}
+
+export async function saveWorkspaceNotes(
+  workspaceId: string,
+  notes: string
+): Promise<void> {
+  return invoke("save_workspace_notes", { workspaceId, notes });
+}
+
+export async function loadWorkspaceNotes(
+  workspaceId: string
+): Promise<string> {
+  return invoke("load_workspace_notes", { workspaceId });
+}
+
+export async function listWorkspaceConfigs(): Promise<WorkspaceConfig[]> {
+  return invoke("list_workspace_configs");
+}
+
+// Scripts commands
+
+export async function loadHeroiConfig(
+  worktreePath: string
+): Promise<HeroiConfig> {
+  return invoke("load_heroi_config", { worktreePath });
+}
+
+export async function saveHeroiConfig(
+  worktreePath: string,
+  config: HeroiConfig
+): Promise<void> {
+  return invoke("save_heroi_config", { worktreePath, config });
+}
+
+export async function runScript(
+  workspaceId: string,
+  script: ScriptDef,
+  worktreePath: string,
+  extraEnv: Record<string, string>
+): Promise<RunningProcess> {
+  return invoke("run_script", { workspaceId, script, worktreePath, extraEnv });
+}
+
+export async function stopProcess(processId: string): Promise<void> {
+  return invoke("stop_process", { processId });
+}
+
+export async function listRunningProcesses(
+  workspaceId?: string
+): Promise<RunningProcess[]> {
+  return invoke("list_running_processes", { workspaceId });
+}
+
+export async function cleanupProcesses(): Promise<void> {
+  return invoke("cleanup_processes");
+}
+
+// GitHub / PR commands
+
+export async function checkGhAvailable(): Promise<boolean> {
+  return invoke("check_gh_available");
+}
+
+export async function createPr(
+  worktreePath: string,
+  title: string,
+  body: string,
+  baseBranch?: string,
+  draft?: boolean
+): Promise<PrInfo> {
+  return invoke("create_pr", {
+    worktreePath,
+    title,
+    body,
+    baseBranch,
+    draft: draft ?? false,
+  });
+}
+
+export async function getPrStatus(worktreePath: string): Promise<PrInfo> {
+  return invoke("get_pr_status", { worktreePath });
+}
+
+export async function listPrChecks(
+  worktreePath: string
+): Promise<CheckRun[]> {
+  return invoke("list_pr_checks", { worktreePath });
+}
+
+export async function mergePr(
+  worktreePath: string,
+  method: MergeMethod,
+  deleteBranch?: boolean
+): Promise<void> {
+  return invoke("merge_pr", {
+    worktreePath,
+    method,
+    deleteBranch: deleteBranch ?? true,
+  });
+}
+
+// File browser commands
+
+export async function listDirectory(dirPath: string): Promise<DirEntry[]> {
+  return invoke("list_directory", { dirPath });
+}
+
+export async function readFile(filePath: string): Promise<FileContent> {
+  return invoke("read_file", { filePath });
+}
+
+export async function fileExists(filePath: string): Promise<boolean> {
+  return invoke("file_exists", { filePath });
+}
+
+// Checkpoint commands
+
+export async function createCheckpoint(
+  workspaceId: string,
+  worktreePath: string,
+  label: string,
+  agentId?: string
+): Promise<Checkpoint> {
+  return invoke("create_checkpoint", { workspaceId, worktreePath, label, agentId });
+}
+
+export async function listCheckpoints(
+  workspaceId: string
+): Promise<Checkpoint[]> {
+  return invoke("list_checkpoints", { workspaceId });
+}
+
+export async function restoreCheckpoint(
+  worktreePath: string,
+  gitRef: string
+): Promise<void> {
+  return invoke("restore_checkpoint", { worktreePath, gitRef });
+}
+
+export async function deleteCheckpoint(checkpointId: string): Promise<void> {
+  return invoke("delete_checkpoint", { checkpointId });
+}
+
+export async function diffCheckpoint(
+  worktreePath: string,
+  fromRef: string,
+  toRef?: string
+): Promise<string> {
+  return invoke("diff_checkpoint", { worktreePath, fromRef, toRef });
 }

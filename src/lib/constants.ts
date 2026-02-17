@@ -1,4 +1,4 @@
-import type { Settings } from "../types";
+import type { Settings, ProviderConfig } from "../types";
 
 export const GIT_POLL_INTERVAL = 3000;
 
@@ -11,11 +11,47 @@ export const IDE_OPTIONS = [
 export const DEFAULT_TERMINAL_COLS = 80;
 export const DEFAULT_TERMINAL_ROWS = 24;
 
+export const DEFAULT_PROVIDERS: ProviderConfig[] = [
+  {
+    id: "anthropic",
+    name: "Anthropic",
+    envVarName: "ANTHROPIC_API_KEY",
+    apiKey: "",
+    baseUrl: "",
+    enabled: true,
+  },
+  {
+    id: "openai",
+    name: "OpenAI",
+    envVarName: "OPENAI_API_KEY",
+    apiKey: "",
+    baseUrl: "",
+    enabled: true,
+  },
+  {
+    id: "google",
+    name: "Google AI",
+    envVarName: "GEMINI_API_KEY",
+    apiKey: "",
+    baseUrl: "",
+    enabled: true,
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    envVarName: "OPENROUTER_API_KEY",
+    apiKey: "",
+    baseUrl: "",
+    enabled: false,
+  },
+];
+
 export const DEFAULT_SETTINGS: Settings = {
   defaultAgentId: "shell",
   gitPollInterval: 3000,
   defaultIde: "vscode",
   agentArgs: {},
+  providers: DEFAULT_PROVIDERS,
 };
 
 export interface FlagDef {

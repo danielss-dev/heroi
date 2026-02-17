@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Plus, Bot, Terminal as TerminalIcon } from "lucide-react";
 import { useAppStore } from "../../stores/useAppStore";
-import { destroySession } from "./XtermTerminal";
+import { destroySession, getSessionStatus } from "./XtermTerminal";
 
 function agentIcon(agentId: string) {
   if (agentId === "shell") return <TerminalIcon size={11} />;
@@ -54,6 +54,7 @@ export function AgentTabBar() {
       <div className="flex items-center gap-0.5 flex-1 overflow-x-auto">
         {tabs.map((tab) => {
           const isActive = tab.id === currentActiveTabId;
+          const sessionStatus = getSessionStatus(tab.id);
           return (
             <button
               key={tab.id}
@@ -64,7 +65,11 @@ export function AgentTabBar() {
                   : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
               }`}
             >
-              {agentIcon(tab.agentId)}
+              {sessionStatus === "running" ? (
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+              ) : (
+                agentIcon(tab.agentId)
+              )}
               <span>{tab.label}</span>
               {tabs.length > 1 && (
                 <span
