@@ -5,10 +5,18 @@ import { RepoList } from "./RepoList";
 import { AddRepoButton } from "./AddRepoButton";
 import { SettingsModal } from "../settings/SettingsModal";
 import heroiLogo from "/heroilogo.png";
+import { WorkspaceSelector } from "../workspace/WorkspaceSelector";
 
 export function RepoSidebar() {
-  const { repos } = useAppStore();
+  const { repos, workspaces, activeWorkspaceId } = useAppStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Filter repos by active workspace if workspaces exist
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+  const filteredRepos =
+    activeWorkspace && activeWorkspace.repoPaths.length > 0
+      ? repos.filter((r) => activeWorkspace.repoPaths.includes(r.path))
+      : repos;
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-panel-bg)] border-r border-[var(--color-panel-border)]">
@@ -19,8 +27,10 @@ export function RepoSidebar() {
         </span>
       </div>
 
+      <WorkspaceSelector />
+
       <div className="flex-1 overflow-y-auto py-1">
-        <RepoList repos={repos} />
+        <RepoList repos={filteredRepos} />
       </div>
 
       <div className="flex items-center gap-1 border-t border-[var(--color-panel-border)] p-1.5">

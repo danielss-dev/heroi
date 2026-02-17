@@ -2,6 +2,7 @@ import { GitCommitHorizontal, RefreshCw } from "lucide-react";
 import { useAppStore } from "../../stores/useAppStore";
 import { useGitStatus } from "../../hooks/useGitStatus";
 import { GitStatusList } from "./GitStatusList";
+import { CommitSection } from "./CommitSection";
 import { DiffPreview } from "./DiffPreview";
 
 export function GitSidebar() {
@@ -15,7 +16,33 @@ export function GitSidebar() {
     refresh,
     stageFile,
     unstageFile,
+    stageAll,
+    unstageAll,
+    commit,
+    push,
+    aheadCount,
+    commitMessage,
+    setCommitMessage,
   } = useGitStatus(selectedWorktree?.path ?? null);
+
+  const stagedFiles = files.filter((f) => f.staged !== "Unmodified");
+
+  const handleCommit = async () => {
+    if (!commitMessage.trim() || stagedFiles.length === 0) return;
+    try {
+      await commit(commitMessage);
+    } catch (err) {
+      console.error("Failed to commit:", err);
+    }
+  };
+
+  const handlePush = async () => {
+    try {
+      await push();
+    } catch (err) {
+      console.error("Failed to push:", err);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-panel-bg)] border-l border-[var(--color-panel-border)]">
@@ -41,13 +68,28 @@ export function GitSidebar() {
         </div>
       ) : (
         <>
-          <div className="overflow-y-auto border-b border-[var(--color-panel-border)]" style={{ maxHeight: "40%" }}>
+          <CommitSection
+            commitMessage={commitMessage}
+            onCommitMessageChange={setCommitMessage}
+            onCommit={handleCommit}
+            onPush={handlePush}
+            aheadCount={aheadCount}
+            hasStagedFiles={stagedFiles.length > 0}
+          />
+
+          <div
+            className="overflow-y-auto border-b border-[var(--color-panel-border)]"
+            style={{ maxHeight: "40%" }}
+          >
             <GitStatusList
               files={files}
               selectedFile={selectedFile}
               onSelectFile={setSelectedFile}
               onStage={stageFile}
               onUnstage={unstageFile}
+              onStageAll={stageAll}
+              onUnstageAll={unstageAll}
+              worktreePath={selectedWorktree.path}
             />
           </div>
 

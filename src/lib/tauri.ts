@@ -8,6 +8,7 @@ import type {
   AgentDef,
   IdeType,
   Settings,
+  Workspace,
 } from "../types";
 
 export async function addRepo(path: string): Promise<RepoEntry> {
@@ -81,11 +82,42 @@ export async function gitUnstageFile(
   return invoke("git_unstage_file", { worktreePath, filePath });
 }
 
+export async function gitStageAll(worktreePath: string): Promise<void> {
+  return invoke("git_stage_all", { worktreePath });
+}
+
+export async function gitUnstageAll(worktreePath: string): Promise<void> {
+  return invoke("git_unstage_all", { worktreePath });
+}
+
+export async function gitCommit(
+  worktreePath: string,
+  message: string
+): Promise<string> {
+  return invoke("git_commit", { worktreePath, message });
+}
+
+export async function gitPush(worktreePath: string): Promise<void> {
+  return invoke("git_push", { worktreePath });
+}
+
+export async function gitAheadCount(worktreePath: string): Promise<number> {
+  return invoke("git_ahead_count", { worktreePath });
+}
+
 export async function openInIde(
   worktreePath: string,
   ide: IdeType
 ): Promise<void> {
   return invoke("open_in_ide", { worktreePath, ide });
+}
+
+export async function openFileInIde(
+  worktreePath: string,
+  filePath: string,
+  ide: IdeType
+): Promise<void> {
+  return invoke("open_file_in_ide", { worktreePath, filePath, ide });
 }
 
 export async function listAgents(): Promise<AgentDef[]> {
@@ -98,4 +130,18 @@ export async function saveSettings(settings: Settings): Promise<void> {
 
 export async function loadSettings(): Promise<Settings | null> {
   return invoke("load_settings");
+}
+
+export async function saveWorkspaces(
+  workspaces: Workspace[],
+  activeWorkspaceId: string | null
+): Promise<void> {
+  return invoke("save_workspaces", { workspaces, activeWorkspaceId });
+}
+
+export async function loadWorkspaces(): Promise<{
+  workspaces: Workspace[] | null;
+  activeWorkspaceId: string | null;
+}> {
+  return invoke("load_workspaces");
 }

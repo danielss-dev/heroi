@@ -39,10 +39,18 @@ pub fn run() {
             commands::git::git_diff_file,
             commands::git::git_stage_file,
             commands::git::git_unstage_file,
+            commands::git::git_stage_all,
+            commands::git::git_unstage_all,
+            commands::git::git_commit,
+            commands::git::git_push,
+            commands::git::git_ahead_count,
             commands::ide::open_in_ide,
+            commands::ide::open_file_in_ide,
             commands::agents::list_agents,
             commands::settings::save_settings,
             commands::settings::load_settings,
+            commands::workspaces::save_workspaces,
+            commands::workspaces::load_workspaces,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

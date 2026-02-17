@@ -9,16 +9,23 @@ export function useGitStatus(worktreePath: string | null) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [diff, setDiff] = useState<DiffOutput | null>(null);
   const [loading, setLoading] = useState(false);
+  const [aheadCount, setAheadCount] = useState(0);
+  const [commitMessage, setCommitMessage] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
     if (!worktreePath) {
       setFiles([]);
+      setAheadCount(0);
       return;
     }
     try {
-      const status = await tauri.gitStatus(worktreePath);
+      const [status, ahead] = await Promise.all([
+        tauri.gitStatus(worktreePath),
+        tauri.gitAheadCount(worktreePath).catch(() => 0),
+      ]);
       setFiles(status);
+      setAheadCount(ahead);
     } catch (err) {
       console.error("Failed to get git status:", err);
     }
@@ -65,6 +72,34 @@ export function useGitStatus(worktreePath: string | null) {
     [worktreePath, refresh]
   );
 
+  const stageAll = useCallback(async () => {
+    if (!worktreePath) return;
+    await tauri.gitStageAll(worktreePath);
+    await refresh();
+  }, [worktreePath, refresh]);
+
+  const unstageAll = useCallback(async () => {
+    if (!worktreePath) return;
+    await tauri.gitUnstageAll(worktreePath);
+    await refresh();
+  }, [worktreePath, refresh]);
+
+  const commit = useCallback(
+    async (message: string) => {
+      if (!worktreePath) return;
+      await tauri.gitCommit(worktreePath, message);
+      setCommitMessage("");
+      await refresh();
+    },
+    [worktreePath, refresh]
+  );
+
+  const push = useCallback(async () => {
+    if (!worktreePath) return;
+    await tauri.gitPush(worktreePath);
+    await refresh();
+  }, [worktreePath, refresh]);
+
   return {
     files,
     selectedFile,
@@ -74,5 +109,12 @@ export function useGitStatus(worktreePath: string | null) {
     refresh,
     stageFile,
     unstageFile,
+    stageAll,
+    unstageAll,
+    commit,
+    push,
+    aheadCount,
+    commitMessage,
+    setCommitMessage,
   };
 }

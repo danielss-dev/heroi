@@ -1,6 +1,5 @@
 import { FolderOpen, Code2, MousePointer, Zap, Play } from "lucide-react";
 import { useAppStore } from "../../stores/useAppStore";
-import { AgentSelector } from "../terminal/AgentSelector";
 import { Button } from "../ui/Button";
 import { openInIde } from "../../lib/tauri";
 import type { IdeType } from "../../types";
@@ -48,14 +47,11 @@ export function TopBar() {
 
           <div className="w-px h-4 bg-zinc-700 mx-1" />
 
-          <AgentSelector />
-
           <Button
             variant="default"
             size="sm"
             className="gap-1.5"
             onClick={() => {
-              // Force re-spawn by dispatching a custom event
               window.dispatchEvent(new CustomEvent("heroi:respawn-agent"));
             }}
           >
