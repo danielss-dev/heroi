@@ -5,8 +5,9 @@ import { saveSettings } from "../../lib/tauri";
 import { Modal } from "../ui/Modal";
 import { GeneralSettings } from "./GeneralSettings";
 import { AgentSettings } from "./AgentSettings";
+import { ProviderSettings } from "./ProviderSettings";
 
-type Section = "general" | "agents";
+type Section = "general" | "agents" | "providers";
 
 interface SettingsModalProps {
   open: boolean;
@@ -52,6 +53,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const navItems: { id: Section; label: string }[] = [
     { id: "general", label: "General" },
     { id: "agents", label: "Agent Parameters" },
+    { id: "providers", label: "AI Providers" },
   ];
 
   return (
@@ -79,6 +81,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           )}
           {section === "agents" && (
             <AgentSettings draft={draft} onChange={updateDraft} />
+          )}
+          {section === "providers" && (
+            <ProviderSettings draft={draft} onChange={updateDraft} />
           )}
         </div>
       </div>

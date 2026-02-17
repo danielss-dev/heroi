@@ -6,8 +6,11 @@ import type {
   Settings,
   AgentTab,
   Workspace,
+  WorkspaceConfig,
 } from "../types";
 import { DEFAULT_SETTINGS } from "../lib/constants";
+
+export type RightPanel = "git" | "diff" | "files" | "scripts";
 
 interface AppState {
   repos: RepoEntry[];
@@ -19,6 +22,7 @@ interface AppState {
   settings: Settings;
   leftPanelWidth: number;
   rightPanelWidth: number;
+  rightPanel: RightPanel;
 
   // Tab state
   worktreeTabs: Record<string, AgentTab[]>;
@@ -40,6 +44,7 @@ interface AppState {
   updateSettings: (partial: Partial<Settings>) => void;
   setLeftPanelWidth: (width: number) => void;
   setRightPanelWidth: (width: number) => void;
+  setRightPanel: (panel: RightPanel) => void;
 
   // Tab actions
   addTab: (worktreePath: string, agentId: string, label: string) => AgentTab;
@@ -51,12 +56,33 @@ interface AppState {
   // Workspace actions
   setWorkspaces: (workspaces: Workspace[]) => void;
   setActiveWorkspaceId: (id: string | null) => void;
-  createWorkspace: (name: string) => Workspace;
+  addWorkspaceFromConfig: (config: WorkspaceConfig) => Workspace;
   switchWorkspace: (id: string) => void;
   deleteWorkspace: (id: string) => void;
   renameWorkspace: (id: string, name: string) => void;
   saveCurrentWorkspace: () => void;
   loadWorkspaceState: (workspace: Workspace) => void;
+}
+
+function workspaceFromConfig(config: WorkspaceConfig): Workspace {
+  return {
+    id: config.id,
+    name: config.name,
+    repoPath: config.repo_path,
+    worktreePath: config.worktree_path,
+    branch: config.branch,
+    isMainWorktree: config.is_main_worktree,
+    portBase: config.port_base,
+    status: config.status === "Active" ? "active" : "archived",
+    createdAt: config.created_at,
+    envVars: config.env_vars,
+    worktreeTabs: {},
+    activeTabId: {},
+    selectedRepo: config.repo_path,
+    selectedWorktreePath: config.worktree_path,
+    leftPanelWidth: 260,
+    rightPanelWidth: 300,
+  };
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -69,6 +95,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   leftPanelWidth: 260,
   rightPanelWidth: 300,
+  rightPanel: "git",
 
   worktreeTabs: {},
   activeTabId: {},
@@ -80,15 +107,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   addRepo: (repo) =>
     set((s) => {
       const newRepos = [...s.repos, repo];
-      // Also add to active workspace
-      if (s.activeWorkspaceId) {
-        const workspaces = s.workspaces.map((w) =>
-          w.id === s.activeWorkspaceId
-            ? { ...w, repoPaths: [...w.repoPaths, repo.path] }
-            : w
-        );
-        return { repos: newRepos, workspaces };
-      }
       return { repos: newRepos };
     }),
   removeRepo: (path) =>
@@ -114,6 +132,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   setLeftPanelWidth: (width) => set({ leftPanelWidth: width }),
   setRightPanelWidth: (width) => set({ rightPanelWidth: width }),
+  setRightPanel: (panel) => set({ rightPanel: panel }),
 
   // Tab actions
   addTab: (worktreePath, agentId, label) => {
@@ -186,23 +205,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setWorkspaces: (workspaces) => set({ workspaces }),
   setActiveWorkspaceId: (id) => set({ activeWorkspaceId: id }),
 
-  createWorkspace: (name) => {
-    const state = get();
-    const workspace: Workspace = {
-      id: crypto.randomUUID(),
-      name,
-      repoPaths: [],
-      worktreeTabs: {},
-      activeTabId: {},
-      selectedRepo: null,
-      selectedWorktreePath: null,
-      leftPanelWidth: 260,
-      rightPanelWidth: 300,
-    };
-    set({
-      workspaces: [...state.workspaces, workspace],
+  addWorkspaceFromConfig: (config: WorkspaceConfig) => {
+    const workspace = workspaceFromConfig(config);
+    set((s) => ({
+      workspaces: [...s.workspaces, workspace],
       activeWorkspaceId: workspace.id,
-    });
+    }));
     return workspace;
   },
 
@@ -214,7 +222,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     const workspace = get().workspaces.find((w) => w.id === id);
     if (!workspace) return;
-    // Destroy all terminal sessions before switching
+    // Hide terminal sessions instead of destroying them (Phase 2 will improve this)
     window.dispatchEvent(new CustomEvent("heroi:destroy-all-sessions"));
     get().loadWorkspaceState(workspace);
     set({ activeWorkspaceId: id });
@@ -245,7 +253,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         w.id === s.activeWorkspaceId
           ? {
               ...w,
-              repoPaths: s.repos.map((r) => r.path),
               worktreeTabs: s.worktreeTabs,
               activeTabId: s.activeTabId,
               selectedRepo: s.selectedRepo,
@@ -259,11 +266,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadWorkspaceState: (workspace) => {
+    // Set the selected worktree based on the workspace's bound worktree
+    const worktreeInfo: WorktreeInfo = {
+      name: workspace.isMainWorktree ? "main" : workspace.name,
+      path: workspace.worktreePath,
+      branch: workspace.branch,
+      is_main: workspace.isMainWorktree,
+    };
+
     set({
       worktreeTabs: workspace.worktreeTabs,
       activeTabId: workspace.activeTabId,
-      selectedRepo: workspace.selectedRepo,
-      selectedWorktree: null,
+      selectedRepo: workspace.repoPath,
+      selectedWorktree: worktreeInfo,
       leftPanelWidth: workspace.leftPanelWidth,
       rightPanelWidth: workspace.rightPanelWidth,
     });

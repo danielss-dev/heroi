@@ -4,6 +4,9 @@ import { useGitStatus } from "../../hooks/useGitStatus";
 import { GitStatusList } from "./GitStatusList";
 import { CommitSection } from "./CommitSection";
 import { DiffPreview } from "./DiffPreview";
+import { PrPanel } from "../pr/PrPanel";
+import { CheckpointTimeline } from "../checkpoints/CheckpointTimeline";
+import { WorkspaceNotes } from "../workspace/WorkspaceNotes";
 
 export function GitSidebar() {
   const { selectedWorktree } = useAppStore();
@@ -45,7 +48,7 @@ export function GitSidebar() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[var(--color-panel-bg)] border-l border-[var(--color-panel-border)]">
+    <div className="flex flex-col h-full bg-[var(--color-panel-bg)]">
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--color-panel-border)]">
         <GitCommitHorizontal size={14} className="text-zinc-500" />
         <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex-1">
@@ -95,6 +98,21 @@ export function GitSidebar() {
 
           <div className="flex-1 overflow-y-auto min-h-0">
             <DiffPreview diff={diff} loading={loading} />
+          </div>
+
+          {/* Checkpoints */}
+          <div className="border-t border-[var(--color-panel-border)] p-3">
+            <CheckpointTimeline />
+          </div>
+
+          {/* Notes */}
+          <div className="border-t border-[var(--color-panel-border)] p-3">
+            <WorkspaceNotes />
+          </div>
+
+          {/* PR Section */}
+          <div className="border-t border-[var(--color-panel-border)] p-3">
+            <PrPanel />
           </div>
         </>
       )}
