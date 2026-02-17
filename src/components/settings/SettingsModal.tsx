@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import type { Settings } from "../../types";
 import { useAppStore } from "../../stores/useAppStore";
 import { saveSettings } from "../../lib/tauri";
+import { buildAgents } from "../../lib/agents";
 import { Modal } from "../ui/Modal";
 import { GeneralSettings } from "./GeneralSettings";
 import { AgentSettings } from "./AgentSettings";
@@ -17,6 +18,7 @@ interface SettingsModalProps {
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const settings = useAppStore((s) => s.settings);
   const setSettings = useAppStore((s) => s.setSettings);
+  const setAgents = useAppStore((s) => s.setAgents);
   const [section, setSection] = useState<Section>("general");
   const [draft, setDraft] = useState<Settings>(settings);
 
@@ -37,6 +39,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
   const handleSave = async () => {
     setSettings(draft);
+
+    // Rebuild agents list if shell changed
+    if (draft.defaultShell !== settings.defaultShell) {
+      setAgents(buildAgents(draft.defaultShell));
+    }
+
     try {
       await saveSettings(draft);
     } catch (err) {
