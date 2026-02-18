@@ -21,7 +21,7 @@ export function RepoSidebar() {
   return (
     <div className="flex flex-col h-full bg-[var(--color-panel-bg)] border-r border-[var(--color-panel-border)]">
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--color-panel-border)]">
-        <img src={heroiLogo} alt="Heroi" className="w-4 h-4 invert" />
+        <img src={heroiLogo} alt="Heroi" className="w-4 h-4" />
         <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
           Heroi
         </span>
