@@ -5,10 +5,10 @@ import {
   Lightbulb,
   MessageSquare,
 } from "lucide-react";
-import type { WorkflowTask, ReviewComment } from "../../types/workflow";
+import type { OrchestrateTask, ReviewComment } from "../../types/orchestrate";
 
 interface ReviewCardProps {
-  task: WorkflowTask;
+  task: OrchestrateTask;
   selected?: boolean;
   onToggleMerge?: (checked: boolean) => void;
   mergeChecked?: boolean;

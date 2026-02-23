@@ -1,7 +1,7 @@
 use tauri_plugin_store::StoreExt;
 
 #[tauri::command]
-pub fn save_workflows(
+pub fn save_orchestrations(
     workflows: serde_json::Value,
     active_workflow_id: serde_json::Value,
     app: tauri::AppHandle,
@@ -14,7 +14,7 @@ pub fn save_workflows(
 }
 
 #[tauri::command]
-pub fn load_workflows(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+pub fn load_orchestrations(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let store = app.store("heroi-store.json").map_err(|e| e.to_string())?;
     let workflows = match store.get("workflows") {
         Some(val) => val.clone(),

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Settings, Workflow } from "lucide-react";
 import { useAppStore } from "../../stores/useAppStore";
-import { useWorkflowStore } from "../../stores/useWorkflowStore";
+import { useOrchestrateStore } from "../../stores/useOrchestrateStore";
 import { RepoList } from "./RepoList";
 import { AddRepoButton } from "./AddRepoButton";
 import { SettingsModal } from "../settings/SettingsModal";
@@ -28,10 +28,10 @@ export function RepoSidebar() {
         <AddRepoButton />
         <button
           onClick={() => {
-            useWorkflowStore.getState().setShowWorkflowView(true);
+            useOrchestrateStore.getState().setShowOrchestrateView(true);
           }}
           className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
-          title="Workflows"
+          title="Orchestrate"
         >
           <Workflow size={16} />
         </button>

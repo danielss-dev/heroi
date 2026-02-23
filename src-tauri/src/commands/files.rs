@@ -109,3 +109,24 @@ pub fn read_file(file_path: String) -> Result<FileContent, String> {
 pub fn file_exists(file_path: String) -> bool {
     Path::new(&file_path).exists()
 }
+
+/// Copy a file from source to destination, creating parent directories as needed.
+#[tauri::command]
+pub fn copy_file(source: String, destination: String) -> Result<(), String> {
+    if let Some(parent) = Path::new(&destination).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
+    }
+    std::fs::copy(&source, &destination).map_err(|e| format!("Failed to copy file: {}", e))?;
+    Ok(())
+}
+
+/// Write raw bytes to a file, creating parent directories as needed.
+/// Used for saving clipboard-pasted images.
+#[tauri::command]
+pub fn write_binary_file(data: Vec<u8>, path: String) -> Result<(), String> {
+    if let Some(parent) = Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directories: {}", e))?;
+    }
+    std::fs::write(&path, &data).map_err(|e| format!("Failed to write file: {}", e))?;
+    Ok(())
+}

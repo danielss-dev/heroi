@@ -5,13 +5,13 @@ import {
   Terminal,
   MessageCircleWarning,
 } from "lucide-react";
-import type { DeveloperSlot, WorkflowTask } from "../../types/workflow";
-import { orchestrator } from "../../lib/workflowOrchestrator";
+import type { DeveloperSlot, OrchestrateTask } from "../../types/orchestrate";
+import { engine } from "../../lib/orchestrateEngine";
 
 interface DeveloperSlotCardProps {
   developer: DeveloperSlot;
-  task?: WorkflowTask;
-  workflowId: string;
+  task?: OrchestrateTask;
+  orchestrationId: string;
   index: number;
 }
 
@@ -34,7 +34,7 @@ const statusConfig = {
 export function DeveloperSlotCard({
   developer,
   task,
-  workflowId,
+  orchestrationId,
   index,
 }: DeveloperSlotCardProps) {
   const config = statusConfig[developer.status];
@@ -92,7 +92,7 @@ export function DeveloperSlotCard({
                   <button
                     key={option}
                     onClick={() =>
-                      orchestrator.sendPromptResponse(workflowId, task.id, option)
+                      engine.sendPromptResponse(orchestrationId, task.id, option)
                     }
                     className="px-2 py-0.5 text-[10px] font-medium rounded bg-amber-600/30 text-amber-200 hover:bg-amber-600/50 transition-colors border border-amber-600/40"
                   >

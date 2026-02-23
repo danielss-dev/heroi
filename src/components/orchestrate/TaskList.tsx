@@ -1,33 +1,33 @@
 import { Plus } from "lucide-react";
 import { Button } from "../ui/Button";
 import { TaskCard } from "./TaskCard";
-import { useWorkflowStore } from "../../stores/useWorkflowStore";
-import type { WorkflowTask } from "../../types/workflow";
+import { useOrchestrateStore } from "../../stores/useOrchestrateStore";
+import type { OrchestrateTask } from "../../types/orchestrate";
 
 interface TaskListProps {
-  workflowId: string;
-  tasks: WorkflowTask[];
+  orchestrationId: string;
+  tasks: OrchestrateTask[];
   editable?: boolean;
 }
 
-export function TaskList({ workflowId, tasks, editable }: TaskListProps) {
+export function TaskList({ orchestrationId, tasks, editable }: TaskListProps) {
   const {
     selectedTaskId,
     setSelectedTask,
     updateTask,
     removeTask,
-  } = useWorkflowStore();
+  } = useOrchestrateStore();
 
   const handleAddTask = () => {
     const title = prompt("Task title:");
     if (!title) return;
     const description = prompt("Task description:") ?? "";
 
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) return;
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) return;
 
-    const newTask: WorkflowTask = {
+    const newTask: OrchestrateTask = {
       id: crypto.randomUUID(),
       title,
       description,
@@ -35,7 +35,7 @@ export function TaskList({ workflowId, tasks, editable }: TaskListProps) {
       status: "pending",
       outputLog: "",
     };
-    store.setTasks(workflowId, [...workflow.tasks, newTask]);
+    store.setTasks(orchestrationId, [...orchestration.tasks, newTask]);
   };
 
   return (
@@ -67,13 +67,13 @@ export function TaskList({ workflowId, tasks, editable }: TaskListProps) {
             onSelect={() => setSelectedTask(task.id)}
             onRemove={
               editable
-                ? () => removeTask(workflowId, task.id)
+                ? () => removeTask(orchestrationId, task.id)
                 : undefined
             }
             onEdit={
               editable
                 ? (title, description) =>
-                    updateTask(workflowId, task.id, { title, description })
+                    updateTask(orchestrationId, task.id, { title, description })
                 : undefined
             }
           />

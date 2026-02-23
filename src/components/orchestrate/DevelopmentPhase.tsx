@@ -2,21 +2,21 @@ import { Play, StopCircle } from "lucide-react";
 import { Button } from "../ui/Button";
 import { TaskList } from "./TaskList";
 import { DeveloperSlotCard } from "./DeveloperSlotCard";
-import { useWorkflowStore } from "../../stores/useWorkflowStore";
-import { orchestrator } from "../../lib/workflowOrchestrator";
-import type { Workflow } from "../../types/workflow";
+import { useOrchestrateStore } from "../../stores/useOrchestrateStore";
+import { engine } from "../../lib/orchestrateEngine";
+import type { Orchestration } from "../../types/orchestrate";
 
-export function DevelopmentPhase({ workflow }: { workflow: Workflow }) {
-  const { getWorkflowProgress } = useWorkflowStore();
-  const progress = getWorkflowProgress(workflow.id);
-  const devComplete = orchestrator.isDevelopmentComplete(workflow.id);
+export function DevelopmentPhase({ orchestration }: { orchestration: Orchestration }) {
+  const { getOrchestrationProgress } = useOrchestrateStore();
+  const progress = getOrchestrationProgress(orchestration.id);
+  const devComplete = engine.isDevelopmentComplete(orchestration.id);
 
   const handleCancel = async () => {
-    await orchestrator.cancelWorkflow(workflow.id);
+    await engine.cancelOrchestration(orchestration.id);
   };
 
   const handleStartReview = async () => {
-    await orchestrator.startReview(workflow.id);
+    await engine.startReview(orchestration.id);
   };
 
   return (
@@ -26,7 +26,7 @@ export function DevelopmentPhase({ workflow }: { workflow: Workflow }) {
         <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800">
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold text-zinc-400">
-              Developers ({workflow.developers.length})
+              Developers ({orchestration.developers.length})
             </span>
             <div className="flex items-center gap-2">
               <div className="w-24 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
@@ -62,14 +62,14 @@ export function DevelopmentPhase({ workflow }: { workflow: Workflow }) {
 
         <div className="flex-1 overflow-auto p-3">
           <div className="flex flex-col gap-2">
-            {workflow.developers.map((dev, i) => {
-              const task = workflow.tasks.find((t) => t.id === dev.taskId);
+            {orchestration.developers.map((dev, i) => {
+              const task = orchestration.tasks.find((t) => t.id === dev.taskId);
               return (
                 <DeveloperSlotCard
                   key={dev.id}
                   developer={dev}
                   task={task}
-                  workflowId={workflow.id}
+                  orchestrationId={orchestration.id}
                   index={i}
                 />
               );
@@ -87,8 +87,8 @@ export function DevelopmentPhase({ workflow }: { workflow: Workflow }) {
         </div>
         <div className="flex-1 overflow-auto p-3">
           <TaskList
-            workflowId={workflow.id}
-            tasks={workflow.tasks}
+            orchestrationId={orchestration.id}
+            tasks={orchestration.tasks}
             editable={false}
           />
         </div>

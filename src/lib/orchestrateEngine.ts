@@ -1,5 +1,5 @@
-import type { WorkflowTask, DeveloperSlot, PendingPrompt } from "../types/workflow";
-import { useWorkflowStore } from "../stores/useWorkflowStore";
+import type { OrchestrateTask, DeveloperSlot, PendingPrompt, Orchestration } from "../types/orchestrate";
+import { useOrchestrateStore } from "../stores/useOrchestrateStore";
 import { useAppStore } from "../stores/useAppStore";
 import { resolveShell, agentShellArgs } from "./agents";
 import {
@@ -26,14 +26,14 @@ function getShell() {
   return resolveShell(settings.defaultShell);
 }
 
-/** Get or create a hidden container for workflow terminal sessions */
-function getWorkflowContainer(): HTMLDivElement {
+/** Get or create a hidden container for orchestrate terminal sessions */
+function getOrchestrateContainer(): HTMLDivElement {
   let el = document.getElementById(
-    "workflow-terminal-container"
+    "orchestrate-terminal-container"
   ) as HTMLDivElement | null;
   if (!el) {
     el = document.createElement("div");
-    el.id = "workflow-terminal-container";
+    el.id = "orchestrate-terminal-container";
     el.style.position = "fixed";
     el.style.width = "1px";
     el.style.height = "1px";
@@ -103,7 +103,7 @@ function stripAnsi(s: string): string {
 }
 
 /**
- * Build the CLI command string for an agent in workflow auto mode.
+ * Build the CLI command string for an agent in orchestrate auto mode.
  * Adds --dangerously-skip-permissions for claude, --full-auto for codex, etc.
  */
 function getAutoModeCommand(agentId: string): string {
@@ -169,46 +169,46 @@ function detectPrompt(recentOutput: string): PendingPrompt | null {
 }
 
 // ---------------------------------------------------------------------------
-// Orchestrator
+// Engine
 // ---------------------------------------------------------------------------
 
-class WorkflowOrchestrator {
-  private static instance: WorkflowOrchestrator;
+class OrchestrateEngine {
+  private static instance: OrchestrateEngine;
   private cleanupFns = new Map<string, Array<() => void>>();
 
-  static getInstance(): WorkflowOrchestrator {
-    if (!WorkflowOrchestrator.instance) {
-      WorkflowOrchestrator.instance = new WorkflowOrchestrator();
+  static getInstance(): OrchestrateEngine {
+    if (!OrchestrateEngine.instance) {
+      OrchestrateEngine.instance = new OrchestrateEngine();
     }
-    return WorkflowOrchestrator.instance;
+    return OrchestrateEngine.instance;
   }
 
   // ---------------------------------------------------------------------------
   // Planning Phase
   // ---------------------------------------------------------------------------
 
-  async startPlanning(workflowId: string): Promise<void> {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) throw new Error("Workflow not found");
+  async startPlanning(orchestrationId: string): Promise<void> {
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) throw new Error("Orchestration not found");
 
-    store.setPhase(workflowId, "planning");
+    store.setPhase(orchestrationId, "planning");
     store.clearPlanOutput();
 
-    // Worktree is created at workflow creation time (WorkflowCreator).
+    // Worktree is created at orchestration creation time (OrchestrateCreator).
     // Use planWorktreePath, falling back to repo path.
-    const worktreePath = workflow.planWorktreePath ?? workflow.repoPath;
+    const worktreePath = orchestration.planWorktreePath ?? orchestration.repoPath;
 
-    store.updateWorkflow(workflowId, {
+    store.updateOrchestration(orchestrationId, {
       startedAt: new Date().toISOString(),
     });
 
     // Create a terminal session for the plan agent
-    const tabId = `wf-plan-${workflowId}`;
-    const container = getWorkflowContainer();
+    const tabId = `orch-plan-${orchestrationId}`;
+    const container = getOrchestrateContainer();
     const session = createSession(tabId, worktreePath, container);
 
-    store.updateWorkflow(workflowId, { planTabId: tabId });
+    store.updateOrchestration(orchestrationId, { planTabId: tabId });
 
     // Accumulate output
     let outputBuffer = "";
@@ -220,42 +220,44 @@ class WorkflowOrchestrator {
 
     // When process exits, parse the plan
     const cleanupExit = registerExitListener(tabId, (exitCode) => {
+      // Store the raw planning output for shared context
+      store.updateOrchestration(orchestrationId, {
+        planOutput: outputBuffer.slice(-5000),
+      });
+
       if (exitCode === 0) {
-        this.parsePlanOutput(workflowId, outputBuffer);
+        this.parsePlanOutput(orchestrationId, outputBuffer);
       } else {
-        store.updateWorkflow(workflowId, {
+        store.updateOrchestration(orchestrationId, {
           error: `Plan agent exited with code ${exitCode}`,
         });
         // Still try to parse — agent might have produced output before failing
-        this.parsePlanOutput(workflowId, outputBuffer);
+        this.parsePlanOutput(orchestrationId, outputBuffer);
       }
     });
 
-    this.trackCleanup(workflowId, [cleanupOutput, cleanupExit]);
+    this.trackCleanup(orchestrationId, [cleanupOutput, cleanupExit]);
 
-    // Build the planning prompt — include developer count
-    const prompt = this.buildPlanPrompt(
-      workflow.featureDescription,
-      workflow.maxParallel
-    );
+    // Build the planning prompt
+    const prompt = this.buildPlanPrompt(orchestration);
     const shell = getShell();
     const escapedPrompt = escapeShellArg(prompt);
-    const agentCmd = workflow.planAgentId === "claude"
+    const agentCmd = orchestration.planAgentId === "claude"
       ? "claude --dangerously-skip-permissions --print"
-      : workflow.planAgentId;
+      : orchestration.planAgentId;
     const args = agentShellArgs(
       shell,
       `${agentCmd} -p '${escapedPrompt}'`
     );
 
-    spawnInSession(session, shell.command, args, workflow.planAgentId);
+    spawnInSession(session, shell.command, args, orchestration.planAgentId);
   }
 
-  private parsePlanOutput(workflowId: string, output: string): void {
-    const store = useWorkflowStore.getState();
+  private parsePlanOutput(orchestrationId: string, output: string): void {
+    const store = useOrchestrateStore.getState();
     const parsed = parseJsonFromOutput(output);
 
-    const mapTaskItem = (item: unknown, i: number): WorkflowTask => {
+    const mapTaskItem = (item: unknown, i: number): OrchestrateTask => {
       const obj = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
       const complexity = typeof obj.complexity === "string" && ["small", "medium", "large"].includes(obj.complexity)
         ? (obj.complexity as "small" | "medium" | "large")
@@ -271,32 +273,36 @@ class WorkflowOrchestrator {
     };
 
     if (Array.isArray(parsed)) {
-      store.setTasks(workflowId, parsed.map(mapTaskItem));
+      store.setTasks(orchestrationId, parsed.map(mapTaskItem));
     } else if (parsed && typeof parsed === "object" && "tasks" in (parsed as Record<string, unknown>)) {
       const tasksArray = (parsed as { tasks: unknown[] }).tasks;
       if (Array.isArray(tasksArray)) {
-        store.setTasks(workflowId, tasksArray.map(mapTaskItem));
+        store.setTasks(orchestrationId, tasksArray.map(mapTaskItem));
       }
     } else {
       // Could not parse — leave tasks empty, user can see raw output
-      store.updateWorkflow(workflowId, {
+      store.updateOrchestration(orchestrationId, {
         error: "Could not parse plan output. You can add tasks manually.",
       });
     }
   }
 
-  private buildPlanPrompt(
-    featureDescription: string,
-    maxParallel: number
-  ): string {
+  private buildPlanPrompt(orchestration: Orchestration): string {
+    const { featureDescription, maxParallel, contextImages } = orchestration;
+
     const parallelNote =
       maxParallel > 1
         ? `\n\nYou have ${maxParallel} developers available to work in parallel on the same codebase. Design the tasks so that ${maxParallel} developers can work simultaneously without conflicts — assign tasks that touch different files or modules. Group related file changes into the same task to avoid merge conflicts.`
         : "\n\nThe tasks will be executed sequentially by a single developer.";
 
+    let imageNote = "";
+    if (contextImages && contextImages.length > 0) {
+      imageNote = `\n\nReference images have been provided in the working directory. Review these files for visual context before planning:\n${contextImages.map((p) => `- ${p}`).join("\n")}`;
+    }
+
     return `You are a Dev Lead. Given the following feature request, create a structured implementation plan as a JSON array of tasks. Each task should have: "title" (short imperative title), "description" (detailed implementation instructions), and "complexity" ("small", "medium", or "large").
 
-Break the feature into logical, independently implementable tasks.${parallelNote}
+Break the feature into logical, independently implementable tasks.${parallelNote}${imageNote}
 
 Feature request:
 ${featureDescription}
@@ -308,67 +314,67 @@ Output ONLY a JSON array wrapped in \`\`\`json ... \`\`\` fences. No other text.
   // Development Phase
   // ---------------------------------------------------------------------------
 
-  async startDevelopment(workflowId: string): Promise<void> {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) throw new Error("Workflow not found");
+  async startDevelopment(orchestrationId: string): Promise<void> {
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) throw new Error("Orchestration not found");
 
-    store.setPhase(workflowId, "developing");
+    store.setPhase(orchestrationId, "developing");
 
-    // Create developer slots based on maxParallel — all share the workflow worktree
-    const pendingCount = workflow.tasks.filter((t) => t.status === "pending").length;
-    const slotCount = Math.min(workflow.maxParallel, pendingCount);
+    // Create developer slots based on maxParallel — all share the orchestration worktree
+    const pendingCount = orchestration.tasks.filter((t) => t.status === "pending").length;
+    const slotCount = Math.min(orchestration.maxParallel, pendingCount);
     const developers: DeveloperSlot[] = [];
     for (let i = 0; i < slotCount; i++) {
       developers.push({
         id: crypto.randomUUID(),
-        agentId: workflow.devAgentId,
-        worktreePath: workflow.planWorktreePath,
+        agentId: orchestration.devAgentId,
+        worktreePath: orchestration.planWorktreePath,
         status: "idle",
       });
     }
-    store.setDevelopers(workflowId, developers);
+    store.setDevelopers(orchestrationId, developers);
 
     // Assign initial tasks to each developer slot
     for (const dev of developers) {
-      this.assignNextTask(workflowId, dev.id);
+      this.assignNextTask(orchestrationId, dev.id);
     }
   }
 
   private assignNextTask(
-    workflowId: string,
+    orchestrationId: string,
     developerId: string
   ): void {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) return;
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) return;
 
-    const nextTask = workflow.tasks.find((t) => t.status === "pending");
+    const nextTask = orchestration.tasks.find((t) => t.status === "pending");
     if (!nextTask) {
       // No more tasks — mark developer idle and check completion
-      store.updateDeveloper(workflowId, developerId, { status: "idle", taskId: undefined });
-      this.checkDevelopmentComplete(workflowId);
+      store.updateDeveloper(orchestrationId, developerId, { status: "idle", taskId: undefined });
+      this.checkDevelopmentComplete(orchestrationId);
       return;
     }
 
-    // The shared workflow worktree (created during planning)
-    const worktreePath = workflow.planWorktreePath ?? workflow.repoPath;
+    // The shared orchestration worktree (created during planning)
+    const worktreePath = orchestration.planWorktreePath ?? orchestration.repoPath;
 
     // Mark task as in_progress
-    store.updateTask(workflowId, nextTask.id, {
+    store.updateTask(orchestrationId, nextTask.id, {
       status: "in_progress",
       developerId,
       worktreePath,
       startedAt: new Date().toISOString(),
     });
-    store.updateDeveloper(workflowId, developerId, {
+    store.updateDeveloper(orchestrationId, developerId, {
       taskId: nextTask.id,
       status: "working",
     });
 
     // Create terminal session for this task
-    const tabId = `wf-dev-${developerId}-${nextTask.id.slice(0, 8)}`;
-    const container = getWorkflowContainer();
+    const tabId = `orch-dev-${developerId}-${nextTask.id.slice(0, 8)}`;
+    const container = getOrchestrateContainer();
 
     // Destroy existing session if any (from a previous task)
     if (sessions.has(tabId)) {
@@ -376,8 +382,8 @@ Output ONLY a JSON array wrapped in \`\`\`json ... \`\`\` fences. No other text.
     }
 
     const session = createSession(tabId, worktreePath, container);
-    store.updateTask(workflowId, nextTask.id, { tabId });
-    store.updateDeveloper(workflowId, developerId, { tabId });
+    store.updateTask(orchestrationId, nextTask.id, { tabId });
+    store.updateDeveloper(orchestrationId, developerId, { tabId });
 
     // Monitor output
     let taskOutput = "";
@@ -395,84 +401,113 @@ Output ONLY a JSON array wrapped in \`\`\`json ... \`\`\` fences. No other text.
       // Check for prompt patterns in recent output
       const pendingPrompt = detectPrompt(recentChunk);
       if (pendingPrompt) {
-        store.updateTask(workflowId, nextTask.id, { pendingPrompt });
+        store.updateTask(orchestrationId, nextTask.id, { pendingPrompt });
         recentChunk = ""; // Reset after detection to avoid repeat triggers
       }
 
       // Update output log
-      store.updateTask(workflowId, nextTask.id, {
+      store.updateTask(orchestrationId, nextTask.id, {
         outputLog: taskOutput.slice(-10000), // Keep last 10k chars
       });
     });
 
     const cleanupExit = registerExitListener(tabId, (exitCode) => {
       const status = exitCode === 0 ? "completed" : "failed";
-      store.updateTask(workflowId, nextTask.id, {
+      store.updateTask(orchestrationId, nextTask.id, {
         status,
         completedAt: new Date().toISOString(),
         ...(status === "failed" ? { error: `Agent exited with code ${exitCode}` } : {}),
       });
-      store.updateDeveloper(workflowId, developerId, {
+      store.updateDeveloper(orchestrationId, developerId, {
         status: status === "completed" ? "completed" : "failed",
       });
+
+      // Capture dev task summary for shared context
+      const currentOrch = store.orchestrations.find((o) => o.id === orchestrationId);
+      if (currentOrch) {
+        store.updateOrchestration(orchestrationId, {
+          devSummaries: [...(currentOrch.devSummaries ?? []), {
+            taskId: nextTask.id,
+            taskTitle: nextTask.title,
+            outputSnippet: taskOutput.slice(-2000),
+            status,
+          }],
+        });
+      }
 
       // Clean up listeners for this tab
       cleanupOutput();
       cleanupExit();
 
       // Assign the next task (sequential in shared worktree)
-      this.assignNextTask(workflowId, developerId);
+      this.assignNextTask(orchestrationId, developerId);
     });
 
-    this.trackCleanup(workflowId, [cleanupOutput, cleanupExit]);
+    this.trackCleanup(orchestrationId, [cleanupOutput, cleanupExit]);
 
     // Spawn the agent with the task prompt
     const shell = getShell();
-    const agentCommand = workflow.devAgentId === "shell" ? "" : getAutoModeCommand(workflow.devAgentId);
+    const agentCommand = orchestration.devAgentId === "shell" ? "" : getAutoModeCommand(orchestration.devAgentId);
     if (!agentCommand) {
       spawnInSession(session, shell.command, [...shell.args], "shell");
     } else {
-      const prompt = this.buildDevPrompt(nextTask);
+      const prompt = this.buildDevPrompt(nextTask, orchestration);
       const escapedPrompt = escapeShellArg(prompt);
       const args = agentShellArgs(shell, `${agentCommand} -p '${escapedPrompt}'`);
-      spawnInSession(session, shell.command, args, workflow.devAgentId);
+      spawnInSession(session, shell.command, args, orchestration.devAgentId);
     }
   }
 
-  private checkDevelopmentComplete(workflowId: string): void {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) return;
+  private checkDevelopmentComplete(orchestrationId: string): void {
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) return;
 
-    const allTasksDone = workflow.tasks.every(
+    const allTasksDone = orchestration.tasks.every(
       (t) => t.status === "completed" || t.status === "failed" || t.status === "skipped"
     );
-    const allDevsIdle = workflow.developers.every(
+    const allDevsIdle = orchestration.developers.every(
       (d) => d.status !== "working"
     );
 
     if (allTasksDone && allDevsIdle) {
-      const hasCompletedTasks = workflow.tasks.some((t) => t.status === "completed");
+      const hasCompletedTasks = orchestration.tasks.some((t) => t.status === "completed");
       if (hasCompletedTasks) {
         // Auto-transition to review is NOT done — user triggers it
         // Just update phase to show development is complete
-        store.updateWorkflow(workflowId, {
+        store.updateOrchestration(orchestrationId, {
           phase: "developing", // stay in developing, UI will show "Ready for Review" state
         });
       } else {
-        store.setPhase(workflowId, "failed");
-        store.updateWorkflow(workflowId, {
+        store.setPhase(orchestrationId, "failed");
+        store.updateOrchestration(orchestrationId, {
           error: "All tasks failed during development",
         });
       }
     }
   }
 
-  private buildDevPrompt(task: WorkflowTask): string {
-    return `Implement the following task in this repository:
+  private buildDevPrompt(task: OrchestrateTask, orchestration: Orchestration): string {
+    // Build task list overview for context
+    const taskListOverview = orchestration.tasks
+      .map((t, i) => `${i + 1}. [${t.status}] ${t.title}`)
+      .join("\n");
 
+    let imageNote = "";
+    if (orchestration.contextImages && orchestration.contextImages.length > 0) {
+      imageNote = `\n\nReference images are available in the working directory. Review these files if they are relevant to your task:\n${orchestration.contextImages.map((p) => `- ${p}`).join("\n")}`;
+    }
+
+    return `You are implementing a task as part of a larger feature.
+
+Feature: ${orchestration.featureDescription}
+
+All tasks in this feature:
+${taskListOverview}
+
+Your assigned task:
 Title: ${task.title}
-Description: ${task.description}
+Description: ${task.description}${imageNote}
 
 Requirements:
 - Work in the current directory
@@ -486,44 +521,44 @@ Requirements:
   // Review Phase
   // ---------------------------------------------------------------------------
 
-  async startReview(workflowId: string): Promise<void> {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) throw new Error("Workflow not found");
+  async startReview(orchestrationId: string): Promise<void> {
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) throw new Error("Orchestration not found");
 
-    store.setPhase(workflowId, "reviewing");
+    store.setPhase(orchestrationId, "reviewing");
 
     // Run a single review of the entire branch diff against the base branch
-    await this.reviewBranch(workflowId);
+    await this.reviewBranch(orchestrationId);
   }
 
-  private async reviewBranch(workflowId: string): Promise<void> {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) return;
+  private async reviewBranch(orchestrationId: string): Promise<void> {
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) return;
 
-    store.updateWorkflow(workflowId, {
+    store.updateOrchestration(orchestrationId, {
       branchReview: {
-        reviewerId: workflow.reviewAgentId,
+        reviewerId: orchestration.reviewAgentId,
         status: "in_progress",
         comments: [],
       },
     });
 
-    const tabId = `wf-review-${workflowId.slice(0, 8)}`;
-    const container = getWorkflowContainer();
+    const tabId = `orch-review-${orchestrationId.slice(0, 8)}`;
+    const container = getOrchestrateContainer();
 
     if (sessions.has(tabId)) {
       destroySession(tabId);
     }
 
-    // Review in the workflow worktree where all changes live
-    const reviewPath = workflow.planWorktreePath ?? workflow.repoPath;
+    // Review in the orchestration worktree where all changes live
+    const reviewPath = orchestration.planWorktreePath ?? orchestration.repoPath;
     const session = createSession(tabId, reviewPath, container);
 
-    store.updateWorkflow(workflowId, {
+    store.updateOrchestration(orchestrationId, {
       branchReview: {
-        reviewerId: workflow.reviewAgentId,
+        reviewerId: orchestration.reviewAgentId,
         tabId,
         status: "in_progress",
         comments: [],
@@ -537,32 +572,32 @@ Requirements:
     });
 
     const cleanupExit = registerExitListener(tabId, (_exitCode) => {
-      this.parseReviewOutput(workflowId, outputBuffer);
+      this.parseReviewOutput(orchestrationId, outputBuffer);
       cleanupOutput();
       cleanupExit();
     });
 
-    this.trackCleanup(workflowId, [cleanupOutput, cleanupExit]);
+    this.trackCleanup(orchestrationId, [cleanupOutput, cleanupExit]);
 
     // Use interactive mode so the review agent can run git diff itself
-    const prompt = this.buildReviewPrompt(workflow.baseBranch);
+    const prompt = this.buildReviewPrompt(orchestration);
     const shell = getShell();
     const escapedPrompt = escapeShellArg(prompt);
-    const reviewCmd = getAutoModeCommand(workflow.reviewAgentId);
+    const reviewCmd = getAutoModeCommand(orchestration.reviewAgentId);
     const args = agentShellArgs(
       shell,
       `${reviewCmd} -p '${escapedPrompt}'`
     );
 
-    spawnInSession(session, shell.command, args, workflow.reviewAgentId);
+    spawnInSession(session, shell.command, args, orchestration.reviewAgentId);
   }
 
   private parseReviewOutput(
-    workflowId: string,
+    orchestrationId: string,
     output: string
   ): void {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
     const parsed = parseJsonFromOutput(output);
 
     if (parsed && typeof parsed === "object") {
@@ -576,9 +611,9 @@ Requirements:
           severity?: string;
         }>;
       };
-      store.updateWorkflow(workflowId, {
+      store.updateOrchestration(orchestrationId, {
         branchReview: {
-          reviewerId: workflow?.reviewAgentId ?? "claude",
+          reviewerId: orchestration?.reviewAgentId ?? "claude",
           status:
             review.status === "changes_requested"
               ? "changes_requested"
@@ -599,9 +634,9 @@ Requirements:
         },
       });
     } else {
-      store.updateWorkflow(workflowId, {
+      store.updateOrchestration(orchestrationId, {
         branchReview: {
-          reviewerId: workflow?.reviewAgentId ?? "claude",
+          reviewerId: orchestration?.reviewAgentId ?? "claude",
           status: "approved",
           summary: "Could not parse review output. Raw output available in logs.",
           comments: [],
@@ -610,12 +645,29 @@ Requirements:
       });
     }
 
-    // Mark workflow as completed after review
-    store.setPhase(workflowId, "completed");
+    // Mark orchestration as completed after review
+    store.setPhase(orchestrationId, "completed");
   }
 
-  private buildReviewPrompt(baseBranch: string): string {
+  private buildReviewPrompt(orchestration: Orchestration): string {
+    const { baseBranch, featureDescription, devSummaries, contextImages } = orchestration;
+
+    let summariesNote = "";
+    if (devSummaries && devSummaries.length > 0) {
+      const summaryLines = devSummaries.map(
+        (s) => `- [${s.status}] ${s.taskTitle}: ${s.outputSnippet.slice(-500)}`
+      ).join("\n");
+      summariesNote = `\n\nDevelopment task summaries:\n${summaryLines}`;
+    }
+
+    let imageNote = "";
+    if (contextImages && contextImages.length > 0) {
+      imageNote = `\n\nReference images are available in the working directory:\n${contextImages.map((p) => `- ${p}`).join("\n")}`;
+    }
+
     return `You are a senior code reviewer. Review all the changes on this branch compared to the base branch '${baseBranch}'.
+
+Feature being implemented: ${featureDescription}${summariesNote}${imageNote}
 
 First, run this command to see all the changes:
   git diff ${baseBranch}
@@ -652,27 +704,27 @@ Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No othe
   // Cancel / Cleanup
   // ---------------------------------------------------------------------------
 
-  async cancelWorkflow(workflowId: string): Promise<void> {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) return;
+  async cancelOrchestration(orchestrationId: string): Promise<void> {
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) return;
 
     // Kill all active terminal sessions
-    for (const dev of workflow.developers) {
+    for (const dev of orchestration.developers) {
       if (dev.tabId && sessions.has(dev.tabId)) {
         destroySession(dev.tabId);
       }
     }
-    if (workflow.planTabId && sessions.has(workflow.planTabId)) {
-      destroySession(workflow.planTabId);
+    if (orchestration.planTabId && sessions.has(orchestration.planTabId)) {
+      destroySession(orchestration.planTabId);
     }
     // Kill review session
-    if (workflow.branchReview?.tabId && sessions.has(workflow.branchReview.tabId)) {
-      destroySession(workflow.branchReview.tabId);
+    if (orchestration.branchReview?.tabId && sessions.has(orchestration.branchReview.tabId)) {
+      destroySession(orchestration.branchReview.tabId);
     }
 
     // Run tracked cleanup functions
-    const fns = this.cleanupFns.get(workflowId) ?? [];
+    const fns = this.cleanupFns.get(orchestrationId) ?? [];
     for (const fn of fns) {
       try {
         fn();
@@ -680,26 +732,26 @@ Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No othe
         /* ignore */
       }
     }
-    this.cleanupFns.delete(workflowId);
+    this.cleanupFns.delete(orchestrationId);
 
-    store.setPhase(workflowId, "cancelled");
+    store.setPhase(orchestrationId, "cancelled");
   }
 
-  async cleanupWorktrees(workflowId: string): Promise<void> {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) return;
+  async cleanupWorktrees(orchestrationId: string): Promise<void> {
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) return;
 
-    // Remove the single workflow worktree
-    if (workflow.planWorkspaceId) {
+    // Remove the single orchestration worktree
+    if (orchestration.planWorkspaceId) {
       try {
-        await deleteWorkspaceWithWorktree(workflow.planWorkspaceId);
+        await deleteWorkspaceWithWorktree(orchestration.planWorkspaceId);
       } catch {
         /* ignore */
       }
-    } else if (workflow.planWorktreePath && workflow.planWorktreePath !== workflow.repoPath) {
+    } else if (orchestration.planWorktreePath && orchestration.planWorktreePath !== orchestration.repoPath) {
       try {
-        await removeWorktree(workflow.repoPath, workflow.planWorktreePath);
+        await removeWorktree(orchestration.repoPath, orchestration.planWorktreePath);
       } catch {
         /* ignore */
       }
@@ -707,12 +759,12 @@ Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No othe
   }
 
   // ---------------------------------------------------------------------------
-  // Utility: track cleanup functions for a workflow
+  // Utility: track cleanup functions for an orchestration
   // ---------------------------------------------------------------------------
 
-  private trackCleanup(workflowId: string, fns: Array<() => void>): void {
-    const existing = this.cleanupFns.get(workflowId) ?? [];
-    this.cleanupFns.set(workflowId, [...existing, ...fns]);
+  private trackCleanup(orchestrationId: string, fns: Array<() => void>): void {
+    const existing = this.cleanupFns.get(orchestrationId) ?? [];
+    this.cleanupFns.set(orchestrationId, [...existing, ...fns]);
   }
 
   // ---------------------------------------------------------------------------
@@ -720,15 +772,15 @@ Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No othe
   // ---------------------------------------------------------------------------
 
   sendPromptResponse(
-    workflowId: string,
+    orchestrationId: string,
     taskId: string,
     response: string
   ): void {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) return;
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) return;
 
-    const task = workflow.tasks.find((t) => t.id === taskId);
+    const task = orchestration.tasks.find((t) => t.id === taskId);
     if (!task?.tabId) return;
 
     const session = sessions.get(task.tabId);
@@ -739,39 +791,39 @@ Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No othe
     session.pty.write(text);
 
     // Clear the pending prompt
-    store.updateTask(workflowId, taskId, { pendingPrompt: undefined });
+    store.updateTask(orchestrationId, taskId, { pendingPrompt: undefined });
   }
 
   // ---------------------------------------------------------------------------
   // Retry — revert a cancelled/failed step to the previous step's state
   // ---------------------------------------------------------------------------
 
-  async retryPhase(workflowId: string): Promise<void> {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) return;
-    if (workflow.phase !== "cancelled" && workflow.phase !== "failed") return;
+  async retryPhase(orchestrationId: string): Promise<void> {
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) return;
+    if (orchestration.phase !== "cancelled" && orchestration.phase !== "failed") return;
 
-    // Infer which phase was active when the workflow stopped:
-    //  - Has reviews on any task → was in review phase
-    //  - Has developer slots → was in development phase
-    //  - Otherwise → was in planning
-    const hasReviews = !!workflow.branchReview;
-    const hasDevSlots = workflow.developers.length > 0;
+    // Infer which phase was active when the orchestration stopped:
+    //  - Has reviews on any task -> was in review phase
+    //  - Has developer slots -> was in development phase
+    //  - Otherwise -> was in planning
+    const hasReviews = !!orchestration.branchReview;
+    const hasDevSlots = orchestration.developers.length > 0;
 
     if (hasReviews) {
-      // Was in review → revert to development-complete state
+      // Was in review -> revert to development-complete state
       // Clear branch review data, keep task completion status
-      store.updateWorkflow(workflowId, { branchReview: undefined, error: undefined });
-      store.setPhase(workflowId, "developing");
+      store.updateOrchestration(orchestrationId, { branchReview: undefined, error: undefined });
+      store.setPhase(orchestrationId, "developing");
     } else if (hasDevSlots) {
-      // Was in development → revert to planning-complete state (tasks visible)
+      // Was in development -> revert to planning-complete state (tasks visible)
       // Worktree is shared, so no per-developer cleanup needed
 
       // Reset in-progress/failed tasks back to pending, keep task list
-      for (const task of workflow.tasks) {
+      for (const task of orchestration.tasks) {
         if (task.status === "in_progress" || task.status === "failed") {
-          store.updateTask(workflowId, task.id, {
+          store.updateTask(orchestrationId, task.id, {
             status: "pending",
             developerId: undefined,
             worktreePath: undefined,
@@ -787,27 +839,27 @@ Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No othe
       }
 
       // Clear developer slots
-      store.setDevelopers(workflowId, []);
-      store.updateWorkflow(workflowId, { error: undefined });
-      store.setPhase(workflowId, "planning");
+      store.setDevelopers(orchestrationId, []);
+      store.updateOrchestration(orchestrationId, { error: undefined });
+      store.setPhase(orchestrationId, "planning");
     } else {
-      // Was in planning → just reset and allow re-run
-      store.updateWorkflow(workflowId, {
+      // Was in planning -> just reset and allow re-run
+      store.updateOrchestration(orchestrationId, {
         error: undefined,
         startedAt: undefined,
       });
-      store.setPhase(workflowId, "planning");
+      store.setPhase(orchestrationId, "planning");
     }
   }
 
   /** Check if all developer tasks are done (for UI to show "Ready for Review") */
-  isDevelopmentComplete(workflowId: string): boolean {
-    const store = useWorkflowStore.getState();
-    const workflow = store.workflows.find((w) => w.id === workflowId);
-    if (!workflow) return false;
+  isDevelopmentComplete(orchestrationId: string): boolean {
+    const store = useOrchestrateStore.getState();
+    const orchestration = store.orchestrations.find((o) => o.id === orchestrationId);
+    if (!orchestration) return false;
     return (
-      workflow.tasks.length > 0 &&
-      workflow.tasks.every(
+      orchestration.tasks.length > 0 &&
+      orchestration.tasks.every(
         (t) =>
           t.status === "completed" ||
           t.status === "failed" ||
@@ -817,4 +869,4 @@ Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No othe
   }
 }
 
-export const orchestrator = WorkflowOrchestrator.getInstance();
+export const engine = OrchestrateEngine.getInstance();

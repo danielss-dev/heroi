@@ -8,10 +8,10 @@ import {
   Trash2,
   Pencil,
 } from "lucide-react";
-import type { WorkflowTask } from "../../types/workflow";
+import type { OrchestrateTask } from "../../types/orchestrate";
 
 interface TaskCardProps {
-  task: WorkflowTask;
+  task: OrchestrateTask;
   index: number;
   selected?: boolean;
   editable?: boolean;

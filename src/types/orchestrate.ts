@@ -1,6 +1,6 @@
-// ---- Workflow Core Types ----
+// ---- Orchestrate Core Types ----
 
-export type WorkflowPhase =
+export type OrchestratePhase =
   | "planning"
   | "developing"
   | "reviewing"
@@ -25,7 +25,7 @@ export interface PendingPrompt {
   detectedAt: string;
 }
 
-export interface WorkflowTask {
+export interface OrchestrateTask {
   id: string;
   title: string;
   description: string;
@@ -88,14 +88,21 @@ export interface BranchReview {
   completedAt?: string;
 }
 
-export interface Workflow {
+export interface DevTaskSummary {
+  taskId: string;
+  taskTitle: string;
+  outputSnippet: string;  // last ~2000 chars of agent output
+  status: "completed" | "failed";
+}
+
+export interface Orchestration {
   id: string;
   name: string;
   repoPath: string;
   baseBranch: string;
   featureDescription: string;
-  phase: WorkflowPhase;
-  tasks: WorkflowTask[];
+  phase: OrchestratePhase;
+  tasks: OrchestrateTask[];
   developers: DeveloperSlot[];
   maxParallel: number;
   /** Agent IDs for each phase */
@@ -108,6 +115,12 @@ export interface Workflow {
   planWorkspaceId?: string;
   /** Branch-level review (comparing workflow branch vs base branch) */
   branchReview?: BranchReview;
+  /** Raw planning agent output (capped at 5000 chars) */
+  planOutput?: string;
+  /** One per completed dev task */
+  devSummaries?: DevTaskSummary[];
+  /** Relative paths to images inside .context/ */
+  contextImages?: string[];
   createdAt: string;
   startedAt?: string;
   completedAt?: string;

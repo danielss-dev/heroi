@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, Loader2 } from "lucide-react";
-import type { Workflow } from "../../types/workflow";
+import type { Orchestration } from "../../types/orchestrate";
 
 const PHASES = [
   { id: "planning", label: "Plan" },
@@ -13,10 +13,10 @@ function phaseIndex(phase: string): number {
   return idx >= 0 ? idx : -1;
 }
 
-export function WorkflowProgress({ workflow }: { workflow: Workflow }) {
-  const currentIdx = phaseIndex(workflow.phase);
-  const isFailed = workflow.phase === "failed";
-  const isCancelled = workflow.phase === "cancelled";
+export function OrchestrateProgress({ orchestration }: { orchestration: Orchestration }) {
+  const currentIdx = phaseIndex(orchestration.phase);
+  const isFailed = orchestration.phase === "failed";
+  const isCancelled = orchestration.phase === "cancelled";
 
   return (
     <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800 bg-zinc-900/50">
@@ -65,7 +65,7 @@ export function WorkflowProgress({ workflow }: { workflow: Workflow }) {
       {(isFailed || isCancelled) && (
         <span className="ml-auto text-xs text-red-400">
           {isFailed ? "Failed" : "Cancelled"}
-          {workflow.error && `: ${workflow.error}`}
+          {orchestration.error && `: ${orchestration.error}`}
         </span>
       )}
     </div>

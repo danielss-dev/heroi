@@ -177,20 +177,36 @@ export async function loadWorkspaces(): Promise<{
   return invoke("load_workspaces");
 }
 
-// Workflow persistence
+// Orchestration persistence
 
-export async function saveWorkflows(
+export async function saveOrchestrations(
   workflows: unknown[],
   activeWorkflowId: string | null
 ): Promise<void> {
-  return invoke("save_workflows", { workflows, activeWorkflowId });
+  return invoke("save_orchestrations", { workflows, activeWorkflowId });
 }
 
-export async function loadWorkflows(): Promise<{
+export async function loadOrchestrations(): Promise<{
   workflows: unknown[] | null;
   activeWorkflowId: string | null;
 }> {
-  return invoke("load_workflows");
+  return invoke("load_orchestrations");
+}
+
+// File copy (used for image attachments)
+
+export async function copyFile(
+  source: string,
+  destination: string
+): Promise<void> {
+  return invoke("copy_file", { source, destination });
+}
+
+export async function writeBinaryFile(
+  data: number[],
+  path: string
+): Promise<void> {
+  return invoke("write_binary_file", { data, path });
 }
 
 // Workspace lifecycle commands (backed by Rust + git worktrees)

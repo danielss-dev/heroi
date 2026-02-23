@@ -8,8 +8,8 @@ import {
   GitBranch,
 } from "lucide-react";
 import { Button } from "../ui/Button";
-import { orchestrator } from "../../lib/workflowOrchestrator";
-import type { Workflow, ReviewComment } from "../../types/workflow";
+import { engine } from "../../lib/orchestrateEngine";
+import type { Orchestration, ReviewComment } from "../../types/orchestrate";
 
 const severityConfig = {
   suggestion: {
@@ -49,12 +49,12 @@ function CommentItem({ comment }: { comment: ReviewComment }) {
   );
 }
 
-export function ReviewPhase({ workflow }: { workflow: Workflow }) {
-  const review = workflow.branchReview;
+export function ReviewPhase({ orchestration }: { orchestration: Orchestration }) {
+  const review = orchestration.branchReview;
   const isInProgress = !review || review.status === "in_progress";
 
   const handleCleanup = async () => {
-    await orchestrator.cleanupWorktrees(workflow.id);
+    await engine.cleanupWorktrees(orchestration.id);
   };
 
   return (
@@ -66,7 +66,7 @@ export function ReviewPhase({ workflow }: { workflow: Workflow }) {
           </span>
           <div className="flex items-center gap-1 text-[10px] text-zinc-600 font-mono">
             <GitBranch size={10} />
-            vs {workflow.baseBranch}
+            vs {orchestration.baseBranch}
           </div>
           {isInProgress && (
             <div className="flex items-center gap-1.5 text-[10px] text-indigo-400">

@@ -10,9 +10,9 @@ import { TerminalPanel } from "../terminal/TerminalPanel";
 import { GitSidebar } from "../git/GitSidebar";
 import { RunPanel } from "../scripts/RunPanel";
 import { FileBrowser } from "../files/FileBrowser";
-import { WorkflowView } from "../workflow/WorkflowView";
+import { OrchestrateView } from "../orchestrate/OrchestrateView";
 import { useAppStore } from "../../stores/useAppStore";
-import { useWorkflowStore } from "../../stores/useWorkflowStore";
+import { useOrchestrateStore } from "../../stores/useOrchestrateStore";
 import type { RightPanel } from "../../stores/useAppStore";
 
 const RIGHT_TABS: {
@@ -35,7 +35,7 @@ export function AppLayout() {
     setRightPanel,
   } = useAppStore();
 
-  const showWorkflowView = useWorkflowStore((s) => s.showWorkflowView);
+  const showOrchestrateView = useOrchestrateStore((s) => s.showOrchestrateView);
 
   const draggingRef = useRef<"left" | "right" | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -94,8 +94,8 @@ export function AppLayout() {
 
       {/* Center Panel */}
       <div className="flex-1 flex flex-col min-w-0 h-full">
-        {showWorkflowView ? (
-          <WorkflowView />
+        {showOrchestrateView ? (
+          <OrchestrateView />
         ) : (
           <>
             <TopBar />

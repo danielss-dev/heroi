@@ -2,22 +2,22 @@ import { useState } from "react";
 import { Play, RotateCcw, Loader2 } from "lucide-react";
 import { Button } from "../ui/Button";
 import { TaskList } from "./TaskList";
-import { useWorkflowStore } from "../../stores/useWorkflowStore";
-import { orchestrator } from "../../lib/workflowOrchestrator";
-import type { Workflow } from "../../types/workflow";
+import { useOrchestrateStore } from "../../stores/useOrchestrateStore";
+import { engine } from "../../lib/orchestrateEngine";
+import type { Orchestration } from "../../types/orchestrate";
 
-export function PlanningPhase({ workflow }: { workflow: Workflow }) {
-  const planOutputBuffer = useWorkflowStore((s) => s.planOutputBuffer);
+export function PlanningPhase({ orchestration }: { orchestration: Orchestration }) {
+  const planOutputBuffer = useOrchestrateStore((s) => s.planOutputBuffer);
   const [starting, setStarting] = useState(false);
 
-  const hasTasks = workflow.tasks.length > 0;
+  const hasTasks = orchestration.tasks.length > 0;
   const isRunning =
-    !hasTasks && !workflow.error && workflow.startedAt !== undefined;
+    !hasTasks && !orchestration.error && orchestration.startedAt !== undefined;
 
   const handleRetryPlan = async () => {
     setStarting(true);
     try {
-      await orchestrator.startPlanning(workflow.id);
+      await engine.startPlanning(orchestration.id);
     } catch (err) {
       console.error("Failed to start planning:", err);
     }
@@ -25,7 +25,7 @@ export function PlanningPhase({ workflow }: { workflow: Workflow }) {
   };
 
   const handleStartDev = async () => {
-    await orchestrator.startDevelopment(workflow.id);
+    await engine.startDevelopment(orchestration.id);
   };
 
   return (
@@ -36,7 +36,7 @@ export function PlanningPhase({ workflow }: { workflow: Workflow }) {
           <span className="text-xs font-semibold text-zinc-400">
             Plan Agent Output
           </span>
-          {(workflow.error || hasTasks) && (
+          {(orchestration.error || hasTasks) && (
             <Button
               variant="ghost"
               size="sm"
@@ -57,9 +57,9 @@ export function PlanningPhase({ workflow }: { workflow: Workflow }) {
           )}
           {planOutputBuffer || (
             <span className="text-zinc-600">
-              {workflow.startedAt
+              {orchestration.startedAt
                 ? "Waiting for output..."
-                : "Plan will be generated when the workflow starts."}
+                : "Plan will be generated when the orchestration starts."}
             </span>
           )}
         </div>
@@ -74,8 +74,8 @@ export function PlanningPhase({ workflow }: { workflow: Workflow }) {
         </div>
         <div className="flex-1 overflow-auto p-3">
           <TaskList
-            workflowId={workflow.id}
-            tasks={workflow.tasks}
+            orchestrationId={orchestration.id}
+            tasks={orchestration.tasks}
             editable={hasTasks}
           />
         </div>
@@ -87,7 +87,7 @@ export function PlanningPhase({ workflow }: { workflow: Workflow }) {
               onClick={handleStartDev}
             >
               <Play size={12} />
-              Start Development ({workflow.tasks.length} tasks)
+              Start Development ({orchestration.tasks.length} tasks)
             </Button>
           </div>
         )}
