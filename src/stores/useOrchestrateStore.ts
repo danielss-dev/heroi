@@ -106,6 +106,8 @@ function prepareForPersistence(orchestrations: Orchestration[]): unknown[] {
       ...s,
       outputSnippet: s.outputSnippet.slice(-500),
     })),
+    // Strip envSnapshot (contains API keys, should not persist to disk)
+    envSnapshot: undefined,
   }));
 }
 

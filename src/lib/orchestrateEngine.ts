@@ -1,4 +1,4 @@
-import type { OrchestrateTask, DeveloperSlot, PendingPrompt, Orchestration } from "../types/orchestrate";
+import type { OrchestrateTask, DeveloperSlot, PendingPrompt, Orchestration, DevTaskSummary } from "../types/orchestrate";
 import { useOrchestrateStore } from "../stores/useOrchestrateStore";
 import { useAppStore } from "../stores/useAppStore";
 import { resolveShell, agentShellArgs } from "./agents";
@@ -169,6 +169,64 @@ function detectPrompt(recentOutput: string): PendingPrompt | null {
 }
 
 // ---------------------------------------------------------------------------
+// Token Budget
+// ---------------------------------------------------------------------------
+
+const PROMPT_BUDGETS = { plan: 30_000, dev: 20_000, review: 30_000 };
+
+interface PromptSection {
+  label: string;
+  content: string;
+  priority: number;  // higher = more important
+}
+
+/**
+ * Assemble prompt sections within a character budget.
+ * Includes sections by priority (highest first), truncating the lowest-priority
+ * section that doesn't fully fit. Reassembles in original insertion order.
+ */
+function buildPromptWithBudget(
+  sections: PromptSection[],
+  maxChars: number
+): string {
+  // Sort by priority descending to decide inclusion order
+  const byPriority = [...sections]
+    .map((s, idx) => ({ ...s, idx }))
+    .sort((a, b) => b.priority - a.priority);
+
+  let remaining = maxChars;
+  const included = new Set<number>();
+
+  for (const section of byPriority) {
+    if (!section.content) continue;
+    if (section.content.length <= remaining) {
+      included.add(section.idx);
+      remaining -= section.content.length;
+    } else if (remaining > 100) {
+      // Truncate lowest-priority section that doesn't fully fit
+      section.content = section.content.slice(0, remaining - 20) + "\n[...truncated]";
+      included.add(section.idx);
+      remaining = 0;
+    }
+  }
+
+  // Reassemble in original insertion order
+  return sections
+    .filter((_, i) => included.has(i))
+    .map((s) => s.content)
+    .join("\n\n");
+}
+
+/** Extract TASK_JOURNAL from terminal output */
+function extractJournal(output: string): string | undefined {
+  const match = output.match(/TASK_JOURNAL_START\s*\n([\s\S]*?)TASK_JOURNAL_END/);
+  if (match) {
+    return match[1].trim().slice(0, 1000);
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Engine
 // ---------------------------------------------------------------------------
 
@@ -250,7 +308,7 @@ class OrchestrateEngine {
       `${agentCmd} -p '${escapedPrompt}'`
     );
 
-    spawnInSession(session, shell.command, args, orchestration.planAgentId);
+    spawnInSession(session, shell.command, args, orchestration.planAgentId, orchestration.envSnapshot);
   }
 
   private parsePlanOutput(orchestrationId: string, output: string): void {
@@ -292,22 +350,45 @@ class OrchestrateEngine {
 
     const parallelNote =
       maxParallel > 1
-        ? `\n\nYou have ${maxParallel} developers available to work in parallel on the same codebase. Design the tasks so that ${maxParallel} developers can work simultaneously without conflicts — assign tasks that touch different files or modules. Group related file changes into the same task to avoid merge conflicts.`
-        : "\n\nThe tasks will be executed sequentially by a single developer.";
+        ? `You have ${maxParallel} developers available to work in parallel on the same codebase. Design the tasks so that ${maxParallel} developers can work simultaneously without conflicts — assign tasks that touch different files or modules. Group related file changes into the same task to avoid merge conflicts.`
+        : "The tasks will be executed sequentially by a single developer.";
 
     let imageNote = "";
     if (contextImages && contextImages.length > 0) {
-      imageNote = `\n\nReference images have been provided in the working directory. Review these files for visual context before planning:\n${contextImages.map((p) => `- ${p}`).join("\n")}`;
+      imageNote = `Reference images have been provided in the working directory. Review these files for visual context before planning:\n${contextImages.map((p) => `- ${p}`).join("\n")}`;
     }
 
-    return `You are a Dev Lead. Given the following feature request, create a structured implementation plan as a JSON array of tasks. Each task should have: "title" (short imperative title), "description" (detailed implementation instructions), and "complexity" ("small", "medium", or "large").
+    const sections: PromptSection[] = [
+      {
+        label: "instructions",
+        priority: 10,
+        content: `You are a Dev Lead. Given the following feature request, create a structured implementation plan as a JSON array of tasks. Each task should have: "title" (short imperative title), "description" (detailed implementation instructions), and "complexity" ("small", "medium", or "large").
 
-Break the feature into logical, independently implementable tasks.${parallelNote}${imageNote}
+Break the feature into logical, independently implementable tasks.`,
+      },
+      {
+        label: "feature",
+        priority: 9,
+        content: `Feature request:\n${featureDescription}`,
+      },
+      {
+        label: "parallel",
+        priority: 7,
+        content: parallelNote,
+      },
+      {
+        label: "images",
+        priority: 3,
+        content: imageNote,
+      },
+      {
+        label: "output",
+        priority: 10,
+        content: "Output ONLY a JSON array wrapped in ```json ... ``` fences. No other text.",
+      },
+    ];
 
-Feature request:
-${featureDescription}
-
-Output ONLY a JSON array wrapped in \`\`\`json ... \`\`\` fences. No other text.`;
+    return buildPromptWithBudget(sections, PROMPT_BUDGETS.plan);
   }
 
   // ---------------------------------------------------------------------------
@@ -413,9 +494,13 @@ Output ONLY a JSON array wrapped in \`\`\`json ... \`\`\` fences. No other text.
 
     const cleanupExit = registerExitListener(tabId, (exitCode) => {
       const status = exitCode === 0 ? "completed" : "failed";
+
+      // Extract journal from terminal output
+      const journal = extractJournal(taskOutput);
       store.updateTask(orchestrationId, nextTask.id, {
         status,
         completedAt: new Date().toISOString(),
+        journal,
         ...(status === "failed" ? { error: `Agent exited with code ${exitCode}` } : {}),
       });
       store.updateDeveloper(orchestrationId, developerId, {
@@ -425,13 +510,15 @@ Output ONLY a JSON array wrapped in \`\`\`json ... \`\`\` fences. No other text.
       // Capture dev task summary for shared context
       const currentOrch = store.orchestrations.find((o) => o.id === orchestrationId);
       if (currentOrch) {
+        const summary: DevTaskSummary = {
+          taskId: nextTask.id,
+          taskTitle: nextTask.title,
+          outputSnippet: taskOutput.slice(-2000),
+          status,
+          journal,
+        };
         store.updateOrchestration(orchestrationId, {
-          devSummaries: [...(currentOrch.devSummaries ?? []), {
-            taskId: nextTask.id,
-            taskTitle: nextTask.title,
-            outputSnippet: taskOutput.slice(-2000),
-            status,
-          }],
+          devSummaries: [...(currentOrch.devSummaries ?? []), summary],
         });
       }
 
@@ -449,12 +536,12 @@ Output ONLY a JSON array wrapped in \`\`\`json ... \`\`\` fences. No other text.
     const shell = getShell();
     const agentCommand = orchestration.devAgentId === "shell" ? "" : getAutoModeCommand(orchestration.devAgentId);
     if (!agentCommand) {
-      spawnInSession(session, shell.command, [...shell.args], "shell");
+      spawnInSession(session, shell.command, [...shell.args], "shell", orchestration.envSnapshot);
     } else {
       const prompt = this.buildDevPrompt(nextTask, orchestration);
       const escapedPrompt = escapeShellArg(prompt);
       const args = agentShellArgs(shell, `${agentCommand} -p '${escapedPrompt}'`);
-      spawnInSession(session, shell.command, args, orchestration.devAgentId);
+      spawnInSession(session, shell.command, args, orchestration.devAgentId, orchestration.envSnapshot);
     }
   }
 
@@ -493,28 +580,79 @@ Output ONLY a JSON array wrapped in \`\`\`json ... \`\`\` fences. No other text.
       .map((t, i) => `${i + 1}. [${t.status}] ${t.title}`)
       .join("\n");
 
-    let imageNote = "";
-    if (orchestration.contextImages && orchestration.contextImages.length > 0) {
-      imageNote = `\n\nReference images are available in the working directory. Review these files if they are relevant to your task:\n${orchestration.contextImages.map((p) => `- ${p}`).join("\n")}`;
+    // Plan context from planning phase (cap at 2000 chars for dev prompt)
+    let planContext = "";
+    if (orchestration.planOutput) {
+      const capped = orchestration.planOutput.slice(0, 2000);
+      planContext = `Architectural plan from the lead developer:\n${capped}`;
     }
 
-    return `You are implementing a task as part of a larger feature.
+    // Peer journals from completed tasks
+    let peerJournals = "";
+    const completedWithJournals = orchestration.tasks.filter(
+      (t) => t.id !== task.id && t.journal && (t.status === "completed" || t.status === "failed")
+    );
+    if (completedWithJournals.length > 0) {
+      const journalLines = completedWithJournals
+        .map((t) => `### ${t.title}\n${t.journal}`)
+        .join("\n\n");
+      peerJournals = `What other developers have already done:\n${journalLines}`;
+    }
 
-Feature: ${orchestration.featureDescription}
+    let imageNote = "";
+    if (orchestration.contextImages && orchestration.contextImages.length > 0) {
+      imageNote = `Reference images are available in the working directory. Review these files if they are relevant to your task:\n${orchestration.contextImages.map((p) => `- ${p}`).join("\n")}`;
+    }
 
-All tasks in this feature:
-${taskListOverview}
-
-Your assigned task:
-Title: ${task.title}
-Description: ${task.description}${imageNote}
-
-Requirements:
+    const sections: PromptSection[] = [
+      {
+        label: "task",
+        priority: 10,
+        content: `You are implementing a task as part of a larger feature.\n\nYour assigned task:\nTitle: ${task.title}\nDescription: ${task.description}`,
+      },
+      {
+        label: "feature",
+        priority: 9,
+        content: `Feature: ${orchestration.featureDescription}`,
+      },
+      {
+        label: "requirements",
+        priority: 8,
+        content: `Requirements:
 - Work in the current directory
 - Make all necessary code changes
 - Run any relevant tests if applicable
 - Stage your changes with git add but DO NOT commit. Leave the changes staged.
-- When you are done, type /exit to finish`;
+- Before you finish, output a brief summary of what you changed:
+  TASK_JOURNAL_START
+  - Changed file X to do Y
+  - Added function Z in module W
+  TASK_JOURNAL_END
+- When you are done, type /exit to finish`,
+      },
+      {
+        label: "taskList",
+        priority: 6,
+        content: `All tasks in this feature:\n${taskListOverview}`,
+      },
+      {
+        label: "planContext",
+        priority: 5,
+        content: planContext,
+      },
+      {
+        label: "peerJournals",
+        priority: 4,
+        content: peerJournals,
+      },
+      {
+        label: "images",
+        priority: 3,
+        content: imageNote,
+      },
+    ];
+
+    return buildPromptWithBudget(sections, PROMPT_BUDGETS.dev);
   }
 
   // ---------------------------------------------------------------------------
@@ -589,7 +727,7 @@ Requirements:
       `${reviewCmd} -p '${escapedPrompt}'`
     );
 
-    spawnInSession(session, shell.command, args, orchestration.reviewAgentId);
+    spawnInSession(session, shell.command, args, orchestration.reviewAgentId, orchestration.envSnapshot);
   }
 
   private parseReviewOutput(
@@ -652,24 +790,36 @@ Requirements:
   private buildReviewPrompt(orchestration: Orchestration): string {
     const { baseBranch, featureDescription, devSummaries, contextImages } = orchestration;
 
+    // Prefer journal over raw output for summaries
     let summariesNote = "";
     if (devSummaries && devSummaries.length > 0) {
-      const summaryLines = devSummaries.map(
-        (s) => `- [${s.status}] ${s.taskTitle}: ${s.outputSnippet.slice(-500)}`
-      ).join("\n");
-      summariesNote = `\n\nDevelopment task summaries:\n${summaryLines}`;
+      const summaryLines = devSummaries.map((s) => {
+        const detail = s.journal ? s.journal : s.outputSnippet.slice(-500);
+        return `- [${s.status}] ${s.taskTitle}: ${detail}`;
+      }).join("\n");
+      summariesNote = `Development task summaries:\n${summaryLines}`;
     }
 
     let imageNote = "";
     if (contextImages && contextImages.length > 0) {
-      imageNote = `\n\nReference images are available in the working directory:\n${contextImages.map((p) => `- ${p}`).join("\n")}`;
+      imageNote = `Reference images are available in the working directory:\n${contextImages.map((p) => `- ${p}`).join("\n")}`;
     }
 
-    return `You are a senior code reviewer. Review all the changes on this branch compared to the base branch '${baseBranch}'.
-
-Feature being implemented: ${featureDescription}${summariesNote}${imageNote}
-
-First, run this command to see all the changes:
+    const sections: PromptSection[] = [
+      {
+        label: "instructions",
+        priority: 10,
+        content: `You are a senior code reviewer. Review all the changes on this branch compared to the base branch '${baseBranch}'.`,
+      },
+      {
+        label: "feature",
+        priority: 9,
+        content: `Feature being implemented: ${featureDescription}`,
+      },
+      {
+        label: "commands",
+        priority: 8,
+        content: `First, run this command to see all the changes:
   git diff ${baseBranch}
 
 You can also run \`git diff ${baseBranch} --stat\` for an overview, and read specific files if you need more context.
@@ -679,9 +829,22 @@ Review the implementation for:
 - Potential bugs or edge cases
 - Architecture and design concerns
 - Missing error handling
-- Security issues
-
-After your review, output your findings as JSON with this structure:
+- Security issues`,
+      },
+      {
+        label: "summaries",
+        priority: 5,
+        content: summariesNote,
+      },
+      {
+        label: "images",
+        priority: 3,
+        content: imageNote,
+      },
+      {
+        label: "output",
+        priority: 10,
+        content: `After your review, output your findings as JSON with this structure:
 \`\`\`json
 {
   "status": "approved" or "changes_requested",
@@ -697,7 +860,11 @@ After your review, output your findings as JSON with this structure:
 }
 \`\`\`
 
-Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No other text after the JSON.`;
+Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No other text after the JSON.`,
+      },
+    ];
+
+    return buildPromptWithBudget(sections, PROMPT_BUDGETS.review);
   }
 
   // ---------------------------------------------------------------------------
@@ -831,6 +998,7 @@ Output ONLY the JSON wrapped in \`\`\`json ... \`\`\` fences at the end. No othe
             tabId: undefined,
             outputLog: "",
             pendingPrompt: undefined,
+            journal: undefined,
             error: undefined,
             startedAt: undefined,
             completedAt: undefined,

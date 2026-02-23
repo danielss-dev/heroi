@@ -167,22 +167,24 @@ export function spawnInSession(
   session: TerminalSession,
   command: string,
   args: string[],
-  agentId: string
+  agentId: string,
+  envOverride?: Record<string, string>
 ) {
   killSessionPty(session);
   session.terminal.clear();
   session.terminal.reset();
   session.agentId = agentId;
 
-  const workspaceEnv = getActiveWorkspaceEnv();
-  const providerEnv = getProviderEnv();
+  const env = envOverride
+    ? { TERM: "xterm-256color", ...envOverride }
+    : { TERM: "xterm-256color", ...getProviderEnv(), ...getActiveWorkspaceEnv() };
 
   try {
     const pty = spawn(command, args, {
       cols: session.terminal.cols,
       rows: session.terminal.rows,
       cwd: session.worktreePath,
-      env: { TERM: "xterm-256color", ...providerEnv, ...workspaceEnv },
+      env,
     });
 
     session.pty = pty;

@@ -45,6 +45,8 @@ export interface OrchestrateTask {
   pendingPrompt?: PendingPrompt;
   /** Review result, populated during review phase */
   review?: TaskReview;
+  /** Structured summary of what the agent did */
+  journal?: string;
   startedAt?: string;
   completedAt?: string;
   error?: string;
@@ -93,6 +95,8 @@ export interface DevTaskSummary {
   taskTitle: string;
   outputSnippet: string;  // last ~2000 chars of agent output
   status: "completed" | "failed";
+  /** Structured summary from the task */
+  journal?: string;
 }
 
 export interface Orchestration {
@@ -121,6 +125,8 @@ export interface Orchestration {
   devSummaries?: DevTaskSummary[];
   /** Relative paths to images inside .context/ */
   contextImages?: string[];
+  /** Env vars captured at creation time */
+  envSnapshot?: Record<string, string>;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;

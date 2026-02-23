@@ -170,9 +170,30 @@ export function OrchestrateCreator() {
         baseBranch || defaultBranch || "main"
       );
 
+      // Snapshot env vars at creation time to avoid race conditions from workspace switching
+      const appState = useAppStore.getState();
+      const providers = appState.settings.providers ?? [];
+      const envSnapshot: Record<string, string> = {};
+      for (const provider of providers) {
+        if (provider.enabled && provider.apiKey) {
+          envSnapshot[provider.envVarName] = provider.apiKey;
+          if (provider.baseUrl) {
+            const baseUrlKey = provider.envVarName.replace(/_API_KEY$/, "_BASE_URL");
+            if (baseUrlKey !== provider.envVarName) {
+              envSnapshot[baseUrlKey] = provider.baseUrl;
+            }
+          }
+        }
+      }
+      const activeWs = appState.workspaces.find((w) => w.id === appState.activeWorkspaceId);
+      if (activeWs?.envVars) {
+        Object.assign(envSnapshot, activeWs.envVars);
+      }
+
       store.updateOrchestration(orchestration.id, {
         planWorktreePath: config.worktree_path,
         planWorkspaceId: config.id,
+        envSnapshot,
       });
 
       // Copy attached images to .context/ in the worktree
