@@ -97,7 +97,7 @@ export function CreateWorkspaceDialog({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="New Workspace">
+    <Modal open={open} onClose={onClose} title="New Workspace" allowOverflow>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         {/* Repository picker (hidden when defaultRepoPath is provided) */}
         {!defaultRepoPath && (
