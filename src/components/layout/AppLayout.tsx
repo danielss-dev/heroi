@@ -10,7 +10,9 @@ import { TerminalPanel } from "../terminal/TerminalPanel";
 import { GitSidebar } from "../git/GitSidebar";
 import { RunPanel } from "../scripts/RunPanel";
 import { FileBrowser } from "../files/FileBrowser";
+import { OrchestrateView } from "../orchestrate/OrchestrateView";
 import { useAppStore } from "../../stores/useAppStore";
+import { useOrchestrateStore } from "../../stores/useOrchestrateStore";
 import type { RightPanel } from "../../stores/useAppStore";
 
 const RIGHT_TABS: {
@@ -32,6 +34,8 @@ export function AppLayout() {
     setRightPanelWidth,
     setRightPanel,
   } = useAppStore();
+
+  const showOrchestrateView = useOrchestrateStore((s) => s.showOrchestrateView);
 
   const draggingRef = useRef<"left" | "right" | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -88,12 +92,18 @@ export function AppLayout() {
         onMouseDown={handleMouseDown("left")}
       />
 
-      {/* Center Panel — Terminal only */}
+      {/* Center Panel */}
       <div className="flex-1 flex flex-col min-w-0 h-full">
-        <TopBar />
-        <div className="flex-1 min-h-0 flex flex-col">
-          <TerminalPanel />
-        </div>
+        {showOrchestrateView ? (
+          <OrchestrateView />
+        ) : (
+          <>
+            <TopBar />
+            <div className="flex-1 min-h-0 flex flex-col">
+              <TerminalPanel />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Right Resize Handle */}

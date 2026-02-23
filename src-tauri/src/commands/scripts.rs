@@ -3,6 +3,7 @@ use std::path::Path;
 use std::process::Command;
 
 use tauri::State;
+use tauri_plugin_store::StoreExt;
 
 use crate::models::scripts::{HeroiConfig, ProcessStatus, RunningProcess, ScriptDef};
 use crate::state::AppState;
@@ -172,6 +173,43 @@ fn kill_process(pid: u32) -> Result<(), String> {
             libc::kill(-(pid as i32), libc::SIGTERM);
         }
         Ok(())
+    }
+}
+
+/// Save local scripts for a workspace (stored in app store, not in repo).
+#[tauri::command]
+pub fn save_local_scripts(
+    workspace_id: String,
+    config: HeroiConfig,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let store = app
+        .store("heroi-store.json")
+        .map_err(|e| format!("Failed to open store: {}", e))?;
+    let key = format!("local_scripts_{}", workspace_id);
+    let value = serde_json::to_value(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    store.set(&key, value);
+    Ok(())
+}
+
+/// Load local scripts for a workspace.
+#[tauri::command]
+pub fn load_local_scripts(
+    workspace_id: String,
+    app: tauri::AppHandle,
+) -> Result<Option<HeroiConfig>, String> {
+    let store = app
+        .store("heroi-store.json")
+        .map_err(|e| format!("Failed to open store: {}", e))?;
+    let key = format!("local_scripts_{}", workspace_id);
+    match store.get(&key) {
+        Some(value) => {
+            let config: HeroiConfig = serde_json::from_value(value)
+                .map_err(|e| format!("Failed to parse local scripts: {}", e))?;
+            Ok(Some(config))
+        }
+        None => Ok(None),
     }
 }
 

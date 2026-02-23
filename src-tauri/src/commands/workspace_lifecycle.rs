@@ -86,6 +86,7 @@ pub fn create_workspace(
         port_base,
         status: WorkspaceStatus::Active,
         created_at: now_iso8601(),
+        base_branch,
     };
 
     data.workspaces.push(workspace.clone());
@@ -149,6 +150,7 @@ pub fn create_workspace_for_main(
         port_base,
         status: WorkspaceStatus::Active,
         created_at: now_iso8601(),
+        base_branch: None,
     };
 
     data.workspaces.push(workspace.clone());

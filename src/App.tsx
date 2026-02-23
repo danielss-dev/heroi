@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { AppLayout } from "./components/layout/AppLayout";
 import { useAppStore } from "./stores/useAppStore";
+import { useOrchestrateStore } from "./stores/useOrchestrateStore";
 import { listAgents, loadSettings, loadWorkspaces } from "./lib/tauri";
 import { DEFAULT_AGENTS, buildAgents } from "./lib/agents";
 import { DEFAULT_SETTINGS } from "./lib/constants";
@@ -68,6 +69,9 @@ function App() {
       .catch(() => {
         // Use defaults on error
       });
+
+    // Load persisted orchestrations
+    useOrchestrateStore.getState().loadFromDisk();
 
     loadWorkspaces()
       .then((data) => {

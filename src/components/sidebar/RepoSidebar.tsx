@@ -1,22 +1,15 @@
 import { useState } from "react";
-import { Settings } from "lucide-react";
+import { Settings, Workflow } from "lucide-react";
 import { useAppStore } from "../../stores/useAppStore";
+import { useOrchestrateStore } from "../../stores/useOrchestrateStore";
 import { RepoList } from "./RepoList";
 import { AddRepoButton } from "./AddRepoButton";
 import { SettingsModal } from "../settings/SettingsModal";
 import heroiLogo from "/heroilogo.png";
-import { WorkspaceSelector } from "../workspace/WorkspaceSelector";
 
 export function RepoSidebar() {
-  const { repos, workspaces, activeWorkspaceId } = useAppStore();
+  const repos = useAppStore((s) => s.repos);
   const [settingsOpen, setSettingsOpen] = useState(false);
-
-  // Filter repos by active workspace's bound repo if workspaces exist
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
-  const filteredRepos =
-    activeWorkspace && activeWorkspace.repoPath
-      ? repos.filter((r) => r.path === activeWorkspace.repoPath)
-      : repos;
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-panel-bg)] border-r border-[var(--color-panel-border)]">
@@ -27,14 +20,21 @@ export function RepoSidebar() {
         </span>
       </div>
 
-      <WorkspaceSelector />
-
       <div className="flex-1 overflow-y-auto py-1">
-        <RepoList repos={filteredRepos} />
+        <RepoList repos={repos} />
       </div>
 
       <div className="flex items-center gap-1 border-t border-[var(--color-panel-border)] p-1.5">
         <AddRepoButton />
+        <button
+          onClick={() => {
+            useOrchestrateStore.getState().setShowOrchestrateView(true);
+          }}
+          className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+          title="Orchestrate"
+        >
+          <Workflow size={16} />
+        </button>
         <button
           onClick={() => setSettingsOpen(true)}
           className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"

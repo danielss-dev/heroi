@@ -177,6 +177,38 @@ export async function loadWorkspaces(): Promise<{
   return invoke("load_workspaces");
 }
 
+// Orchestration persistence
+
+export async function saveOrchestrations(
+  workflows: unknown[],
+  activeWorkflowId: string | null
+): Promise<void> {
+  return invoke("save_orchestrations", { workflows, activeWorkflowId });
+}
+
+export async function loadOrchestrations(): Promise<{
+  workflows: unknown[] | null;
+  activeWorkflowId: string | null;
+}> {
+  return invoke("load_orchestrations");
+}
+
+// File copy (used for image attachments)
+
+export async function copyFile(
+  source: string,
+  destination: string
+): Promise<void> {
+  return invoke("copy_file", { source, destination });
+}
+
+export async function writeBinaryFile(
+  data: number[],
+  path: string
+): Promise<void> {
+  return invoke("write_binary_file", { data, path });
+}
+
 // Workspace lifecycle commands (backed by Rust + git worktrees)
 
 export async function createWorkspaceWithWorktree(
@@ -268,6 +300,19 @@ export async function listRunningProcesses(
 
 export async function cleanupProcesses(): Promise<void> {
   return invoke("cleanup_processes");
+}
+
+export async function saveLocalScripts(
+  workspaceId: string,
+  config: HeroiConfig
+): Promise<void> {
+  return invoke("save_local_scripts", { workspaceId, config });
+}
+
+export async function loadLocalScripts(
+  workspaceId: string
+): Promise<HeroiConfig | null> {
+  return invoke("load_local_scripts", { workspaceId });
 }
 
 // GitHub / PR commands

@@ -7,9 +7,10 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   size?: "md" | "lg";
+  allowOverflow?: boolean;
 }
 
-export function Modal({ open, onClose, title, children, size = "md" }: ModalProps) {
+export function Modal({ open, onClose, title, children, size = "md", allowOverflow }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
             <X size={16} />
           </button>
         </div>
-        <div className="p-4 max-h-[80vh] overflow-y-auto">{children}</div>
+        <div className={`p-4 max-h-[80vh] ${allowOverflow ? "overflow-visible" : "overflow-y-auto"}`}>{children}</div>
       </div>
     </div>
   );

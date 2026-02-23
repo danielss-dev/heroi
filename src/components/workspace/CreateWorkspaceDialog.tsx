@@ -15,12 +15,14 @@ interface CreateWorkspaceDialogProps {
     branch?: string,
     baseBranch?: string
   ) => Promise<unknown>;
+  defaultRepoPath?: string;
 }
 
 export function CreateWorkspaceDialog({
   open,
   onClose,
   onSubmit,
+  defaultRepoPath,
 }: CreateWorkspaceDialogProps) {
   const repos = useAppStore((s) => s.repos);
 
@@ -42,14 +44,14 @@ export function CreateWorkspaceDialog({
   useEffect(() => {
     if (!open) return;
     setName("");
-    setSelectedRepoPath(repos[0]?.path ?? "");
+    setSelectedRepoPath(defaultRepoPath ?? repos[0]?.path ?? "");
     setCustomBranch("");
     setBaseBranch("");
     setError(null);
     setShowAdvanced(false);
     setBranchSearch("");
     setShowBranchPicker(false);
-  }, [open, repos]);
+  }, [open, repos, defaultRepoPath]);
 
   // Load branches when repo changes
   useEffect(() => {
@@ -95,31 +97,33 @@ export function CreateWorkspaceDialog({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="New Workspace">
+    <Modal open={open} onClose={onClose} title="New Workspace" allowOverflow>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        {/* Repository picker */}
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">
-            Repository
-          </label>
-          {repos.length === 0 ? (
-            <p className="text-xs text-zinc-500">
-              No repositories added. Add a repository first.
-            </p>
-          ) : (
-            <select
-              value={selectedRepoPath}
-              onChange={(e) => setSelectedRepoPath(e.target.value)}
-              className="w-full h-8 px-3 text-sm rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-indigo-500"
-            >
-              {repos.map((r) => (
-                <option key={r.path} value={r.path}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        {/* Repository picker (hidden when defaultRepoPath is provided) */}
+        {!defaultRepoPath && (
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">
+              Repository
+            </label>
+            {repos.length === 0 ? (
+              <p className="text-xs text-zinc-500">
+                No repositories added. Add a repository first.
+              </p>
+            ) : (
+              <select
+                value={selectedRepoPath}
+                onChange={(e) => setSelectedRepoPath(e.target.value)}
+                className="w-full h-8 px-3 text-sm rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-indigo-500"
+              >
+                {repos.map((r) => (
+                  <option key={r.path} value={r.path}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
 
         {/* Workspace name */}
         <div>

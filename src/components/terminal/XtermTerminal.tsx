@@ -7,12 +7,13 @@ import type { IPty } from "tauri-pty";
 import "@xterm/xterm/css/xterm.css";
 import { useAppStore } from "../../stores/useAppStore";
 import { getAgentById, getAgentArgs } from "../../lib/agents";
+import { notifyOutput, notifyExit, removeAllListeners } from "../../lib/terminalMonitor";
 
 // ---------------------------------------------------------------------------
 // Multi-session terminal architecture (keyed by tabId)
 // ---------------------------------------------------------------------------
 
-interface TerminalSession {
+export interface TerminalSession {
   key: string; // tabId
   worktreePath: string;
   agentId: string;
@@ -24,7 +25,7 @@ interface TerminalSession {
   status: "running" | "exited";
 }
 
-const sessions = new Map<string, TerminalSession>();
+export const sessions = new Map<string, TerminalSession>();
 let activeSessionKey: string | null = null;
 
 const TERM_OPTIONS = {
@@ -61,7 +62,7 @@ const TERM_OPTIONS = {
 // Session lifecycle helpers
 // ---------------------------------------------------------------------------
 
-function createSession(
+export function createSession(
   tabId: string,
   worktreePath: string,
   parentEl: HTMLDivElement
@@ -96,7 +97,7 @@ function createSession(
   return session;
 }
 
-function showSession(key: string) {
+export function showSession(key: string) {
   for (const [k, s] of sessions) {
     s.containerEl.style.display = k === key ? "" : "none";
   }
@@ -162,26 +163,28 @@ function getProviderEnv(): Record<string, string> {
   return env;
 }
 
-function spawnInSession(
+export function spawnInSession(
   session: TerminalSession,
   command: string,
   args: string[],
-  agentId: string
+  agentId: string,
+  envOverride?: Record<string, string>
 ) {
   killSessionPty(session);
   session.terminal.clear();
   session.terminal.reset();
   session.agentId = agentId;
 
-  const workspaceEnv = getActiveWorkspaceEnv();
-  const providerEnv = getProviderEnv();
+  const env = envOverride
+    ? { TERM: "xterm-256color", ...envOverride }
+    : { TERM: "xterm-256color", ...getProviderEnv(), ...getActiveWorkspaceEnv() };
 
   try {
     const pty = spawn(command, args, {
       cols: session.terminal.cols,
       rows: session.terminal.rows,
       cwd: session.worktreePath,
-      env: { TERM: "xterm-256color", ...providerEnv, ...workspaceEnv },
+      env,
     });
 
     session.pty = pty;
@@ -189,6 +192,7 @@ function spawnInSession(
 
     const dataDisp = pty.onData((data) => {
       session.terminal.write(new Uint8Array(data));
+      notifyOutput(session.key, new TextDecoder().decode(new Uint8Array(data)));
     });
     session.disposers.push(dataDisp);
 
@@ -200,6 +204,7 @@ function spawnInSession(
         session.pty = null;
         session.status = "exited";
       }
+      notifyExit(session.key, exitCode);
     });
     session.disposers.push(exitDisp);
 
@@ -238,6 +243,7 @@ export function destroySession(key: string) {
   session.terminal.dispose();
   session.containerEl.remove();
   sessions.delete(key);
+  removeAllListeners(key);
   if (activeSessionKey === key) activeSessionKey = null;
 }
 
@@ -377,7 +383,94 @@ export function XtermTerminal() {
     return () => window.removeEventListener("heroi:respawn-agent", handler);
   }, []);
 
-  // Effect 4: Listen for destroy-all-sessions (workspace switching)
+  // Effect 4: "heroi:run-app" — run a command in a Shell tab
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        command: string;
+        name: string;
+      };
+      if (!detail?.command) return;
+
+      const parentEl = containerRef.current;
+      const state = useAppStore.getState();
+      const worktree = state.selectedWorktree;
+      if (!worktree || !parentEl) return;
+
+      const worktreePath = worktree.path;
+      const tabs = state.worktreeTabs[worktreePath] ?? [];
+
+      // Look for an existing Shell tab to reuse
+      let shellTab = tabs.find((t) => t.agentId === "shell");
+      if (!shellTab) {
+        shellTab = state.addTab(worktreePath, "shell", detail.name || "Shell");
+      }
+
+      // Ensure session exists
+      let session = sessions.get(shellTab.id);
+      if (!session) {
+        session = createSession(shellTab.id, worktreePath, parentEl);
+      }
+
+      // Switch to the shell tab and spawn the command
+      state.setActiveTab(worktreePath, shellTab.id);
+      showSession(shellTab.id);
+
+      // Parse command into program + args for the shell
+      // We run via the user's shell so env is inherited
+      spawnInSession(session, "/bin/sh", ["-c", detail.command], "shell");
+    };
+
+    window.addEventListener("heroi:run-app", handler);
+    return () => window.removeEventListener("heroi:run-app", handler);
+  }, []);
+
+  // Effect 5: "heroi:launch-review" — launch agent with a review prompt
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { baseBranch: string };
+      const baseBranch = detail?.baseBranch ?? "main";
+
+      const parentEl = containerRef.current;
+      const state = useAppStore.getState();
+      const worktree = state.selectedWorktree;
+      if (!worktree || !parentEl) return;
+
+      const worktreePath = worktree.path;
+      const settings = state.settings;
+
+      // Find the default agent (or first non-shell agent)
+      const agentsList = state.agents;
+      const defaultAgent =
+        agentsList.find((a) => a.id === settings.defaultAgentId) ??
+        agentsList.find((a) => a.id !== "shell") ??
+        agentsList[0];
+      if (!defaultAgent) return;
+
+      // Create a new tab for the review
+      const tab = state.addTab(worktreePath, defaultAgent.id, "Review");
+      state.setActiveTab(worktreePath, tab.id);
+
+      // Create session, show it, spawn the agent
+      const session = createSession(tab.id, worktreePath, parentEl);
+      showSession(tab.id);
+      const args = getAgentArgs(defaultAgent, settings);
+      spawnInSession(session, defaultAgent.command, args, defaultAgent.id);
+
+      // After the agent boots, write a review prompt to the PTY
+      const reviewPrompt = `Review the code changes on this branch compared to ${baseBranch}. Run \`git diff ${baseBranch}...HEAD\` to see all changes, then provide a thorough code review covering correctness, readability, potential bugs, and suggestions for improvement.\n`;
+      setTimeout(() => {
+        if (session.pty) {
+          session.pty.write(reviewPrompt);
+        }
+      }, 2000);
+    };
+
+    window.addEventListener("heroi:launch-review", handler);
+    return () => window.removeEventListener("heroi:launch-review", handler);
+  }, []);
+
+  // Effect 6: Listen for destroy-all-sessions (workspace switching)
   useEffect(() => {
     const handler = () => destroyAllSessions();
     window.addEventListener("heroi:destroy-all-sessions", handler);
@@ -385,7 +478,7 @@ export function XtermTerminal() {
       window.removeEventListener("heroi:destroy-all-sessions", handler);
   }, []);
 
-  // Effect 5: Cleanup on unmount
+  // Effect 7: Cleanup on unmount
   useEffect(() => {
     return () => {
       destroyAllSessions();
