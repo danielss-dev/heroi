@@ -103,18 +103,6 @@ export const AGENT_KNOWN_FLAGS: Record<string, FlagDef[]> = {
       description: "Suppress non-essential output",
     },
   ],
-  aider: [
-    {
-      flag: "--yes-always",
-      label: "Yes Always",
-      description: "Automatically confirm all prompts",
-    },
-    {
-      flag: "--no-auto-commits",
-      label: "No Auto Commits",
-      description: "Disable automatic git commits",
-    },
-  ],
   gemini: [],
   shell: [],
 };

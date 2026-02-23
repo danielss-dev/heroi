@@ -177,6 +177,22 @@ export async function loadWorkspaces(): Promise<{
   return invoke("load_workspaces");
 }
 
+// Workflow persistence
+
+export async function saveWorkflows(
+  workflows: unknown[],
+  activeWorkflowId: string | null
+): Promise<void> {
+  return invoke("save_workflows", { workflows, activeWorkflowId });
+}
+
+export async function loadWorkflows(): Promise<{
+  workflows: unknown[] | null;
+  activeWorkflowId: string | null;
+}> {
+  return invoke("load_workflows");
+}
+
 // Workspace lifecycle commands (backed by Rust + git worktrees)
 
 export async function createWorkspaceWithWorktree(
@@ -268,6 +284,19 @@ export async function listRunningProcesses(
 
 export async function cleanupProcesses(): Promise<void> {
   return invoke("cleanup_processes");
+}
+
+export async function saveLocalScripts(
+  workspaceId: string,
+  config: HeroiConfig
+): Promise<void> {
+  return invoke("save_local_scripts", { workspaceId, config });
+}
+
+export async function loadLocalScripts(
+  workspaceId: string
+): Promise<HeroiConfig | null> {
+  return invoke("load_local_scripts", { workspaceId });
 }
 
 // GitHub / PR commands

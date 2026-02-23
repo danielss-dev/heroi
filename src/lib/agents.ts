@@ -1,7 +1,7 @@
 import type { AgentDef, Settings, ShellType } from "../types";
 
 // Resolve a ShellType to the actual command + base args for spawning
-function resolveShell(shellType: ShellType): { command: string; args: string[] } {
+export function resolveShell(shellType: ShellType): { command: string; args: string[] } {
   switch (shellType) {
     case "powershell":
       return { command: "powershell.exe", args: ["-NoLogo"] };
@@ -21,7 +21,7 @@ function resolveShell(shellType: ShellType): { command: string; args: string[] }
 }
 
 // Build the agent command that wraps a tool invocation inside the configured shell
-function agentShellArgs(shell: { command: string; args: string[] }, toolCommand: string): string[] {
+export function agentShellArgs(shell: { command: string; args: string[] }, toolCommand: string): string[] {
   // On Windows shells, use -Command flag
   if (shell.command === "powershell.exe") {
     return [...shell.args, "-Command", toolCommand];
@@ -56,13 +56,6 @@ export function buildAgents(shellType: ShellType): AgentDef[] {
       command: shell.command,
       args: agentShellArgs(shell, "gemini"),
       description: "Google Gemini CLI agent",
-    },
-    {
-      id: "aider",
-      name: "Aider",
-      command: shell.command,
-      args: agentShellArgs(shell, "aider"),
-      description: "Aider AI pair programming tool",
     },
     {
       id: "shell",

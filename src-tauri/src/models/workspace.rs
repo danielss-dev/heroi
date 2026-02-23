@@ -26,4 +26,6 @@ pub struct WorkspaceConfig {
     pub port_base: u16,
     pub status: WorkspaceStatus,
     pub created_at: String,
+    #[serde(default)]
+    pub base_branch: Option<String>,
 }

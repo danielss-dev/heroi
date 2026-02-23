@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { ChevronRight, FolderGit2, Plus, Trash2 } from "lucide-react";
-import type { RepoEntry, WorktreeInfo } from "../../types";
+import type { RepoEntry } from "../../types";
 import { useAppStore } from "../../stores/useAppStore";
-import { WorktreeItem } from "./WorktreeItem";
-import { CreateWorktreeDialog } from "./CreateWorktreeDialog";
+import { useWorkspaceActions } from "../../hooks/useWorkspaceActions";
 import { useRepos } from "../../hooks/useRepos";
+import { WorkspaceItem } from "./WorkspaceItem";
+import { CreateWorkspaceDialog } from "../workspace/CreateWorkspaceDialog";
 
 interface RepoItemProps {
   repo: RepoEntry;
@@ -13,19 +14,29 @@ interface RepoItemProps {
 export function RepoItem({ repo }: RepoItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
-  const { worktrees, selectedRepo, selectRepo } = useAppStore();
-  const { loadWorktrees, createWorktree, removeWorktree, removeRepo } =
-    useRepos();
+  const { selectedRepo, selectRepo } = useAppStore();
+  const { removeRepo } = useRepos();
 
-  const allWorktrees: WorktreeInfo[] = worktrees[repo.path] || [];
-  // Only show non-main worktrees in the list
-  const createdWorktrees = allWorktrees.filter((wt) => !wt.is_main);
+  const {
+    activeWorkspaceId,
+    getWorkspacesForRepo,
+    createWorkspace,
+    switchWorkspace,
+    renameWorkspace,
+    archiveWorkspace,
+    deleteWorkspace,
+  } = useWorkspaceActions();
 
+  const repoWorkspaces = getWorkspacesForRepo(repo.path);
+  const activeWorkspaces = repoWorkspaces.filter((ws) => ws.status === "active");
+  const hasActiveWorkspace = repoWorkspaces.some((ws) => ws.id === activeWorkspaceId);
+
+  // Auto-expand if this repo contains the active workspace
   useEffect(() => {
-    if (expanded) {
-      loadWorktrees(repo.path);
+    if (hasActiveWorkspace && !expanded) {
+      setExpanded(true);
     }
-  }, [expanded, repo.path, loadWorktrees]);
+  }, [hasActiveWorkspace]);
 
   const handleToggle = () => {
     setExpanded(!expanded);
@@ -57,7 +68,7 @@ export function RepoItem({ repo }: RepoItemProps) {
               setShowDialog(true);
             }}
             className="p-0.5 text-zinc-500 hover:text-zinc-200 transition-colors"
-            title="New worktree"
+            title="New workspace"
           >
             <Plus size={12} />
           </button>
@@ -76,31 +87,30 @@ export function RepoItem({ repo }: RepoItemProps) {
 
       {expanded && (
         <div className="py-0.5">
-          {createdWorktrees.length === 0 ? (
+          {activeWorkspaces.length === 0 ? (
             <div className="pl-8 pr-2 py-1.5 text-[11px] text-zinc-600 italic">
-              No worktrees yet
+              No workspaces yet
             </div>
           ) : (
-            createdWorktrees.map((wt) => (
-              <WorktreeItem
-                key={wt.path}
-                worktree={wt}
-                repoPath={repo.path}
-                onRemove={removeWorktree}
+            activeWorkspaces.map((ws) => (
+              <WorkspaceItem
+                key={ws.id}
+                workspace={ws}
+                onSwitch={switchWorkspace}
+                onRename={renameWorkspace}
+                onArchive={archiveWorkspace}
+                onDelete={deleteWorkspace}
               />
             ))
           )}
         </div>
       )}
 
-      <CreateWorktreeDialog
+      <CreateWorkspaceDialog
         open={showDialog}
         onClose={() => setShowDialog(false)}
-        onSubmit={(name, branch, baseBranch) =>
-          createWorktree(repo.path, name, branch, baseBranch)
-        }
-        repoPath={repo.path}
-        repoName={repo.name}
+        onSubmit={createWorkspace}
+        defaultRepoPath={repo.path}
       />
     </div>
   );

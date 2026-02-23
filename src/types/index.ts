@@ -45,7 +45,7 @@ export interface BranchInfo {
   is_head: boolean;
 }
 
-export type IdeType = "vscode" | "cursor" | "zed";
+export type IdeType = "finder" | "vscode" | "cursor" | "zed";
 
 export type ShellType = "bash" | "zsh" | "fish" | "sh" | "powershell" | "cmd";
 
@@ -88,6 +88,7 @@ export interface Workspace {
   repoPath: string;
   worktreePath: string;
   branch: string;
+  baseBranch?: string;
   isMainWorktree: boolean;
   portBase: number;
   status: WorkspaceStatus;
@@ -109,6 +110,7 @@ export interface WorkspaceConfig {
   repo_path: string;
   worktree_path: string;
   branch: string;
+  base_branch?: string;
   is_main_worktree: boolean;
   env_vars: Record<string, string>;
   port_base: number;

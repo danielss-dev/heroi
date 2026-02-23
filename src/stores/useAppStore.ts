@@ -60,6 +60,8 @@ interface AppState {
   switchWorkspace: (id: string) => void;
   deleteWorkspace: (id: string) => void;
   renameWorkspace: (id: string, name: string) => void;
+  archiveWorkspaceStatus: (id: string) => void;
+  restoreWorkspaceStatus: (id: string) => void;
   saveCurrentWorkspace: () => void;
   loadWorkspaceState: (workspace: Workspace) => void;
 }
@@ -71,6 +73,7 @@ function workspaceFromConfig(config: WorkspaceConfig): Workspace {
     repoPath: config.repo_path,
     worktreePath: config.worktree_path,
     branch: config.branch,
+    baseBranch: config.base_branch,
     isMainWorktree: config.is_main_worktree,
     portBase: config.port_base,
     status: config.status === "Active" ? "active" : "archived",
@@ -242,6 +245,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({
       workspaces: s.workspaces.map((w) =>
         w.id === id ? { ...w, name } : w
+      ),
+    })),
+
+  archiveWorkspaceStatus: (id) =>
+    set((s) => ({
+      workspaces: s.workspaces.map((w) =>
+        w.id === id ? { ...w, status: "archived" as const } : w
+      ),
+    })),
+
+  restoreWorkspaceStatus: (id) =>
+    set((s) => ({
+      workspaces: s.workspaces.map((w) =>
+        w.id === id ? { ...w, status: "active" as const } : w
       ),
     })),
 

@@ -7,6 +7,7 @@ pub mod ide;
 pub mod repos;
 pub mod scripts;
 pub mod settings;
+pub mod workflows;
 pub mod workspace_lifecycle;
 pub mod workspaces;
 pub mod worktrees;
