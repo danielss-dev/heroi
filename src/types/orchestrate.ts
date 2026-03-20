@@ -153,4 +153,8 @@ export const DEFAULT_COMPLETION_PATTERNS: Record<string, CompletionPattern[]> = 
     { pattern: "Process exited with code 0", signal: "completed" },
     { pattern: "Process exited with code (?!0)", signal: "failed" },
   ],
+  aider: [
+    { pattern: "Process exited with code 0", signal: "completed" },
+    { pattern: "Process exited with code (?!0)", signal: "failed" },
+  ],
 };

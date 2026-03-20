@@ -25,6 +25,13 @@ pub fn list_agents() -> Vec<AgentDef> {
             description: "Google Gemini CLI agent".into(),
         },
         AgentDef {
+            id: "aider".into(),
+            name: "Aider".into(),
+            command: "aider".into(),
+            args: vec![],
+            description: "Aider AI pair programming CLI".into(),
+        },
+        AgentDef {
             id: "shell".into(),
             name: "Shell".into(),
             command: if cfg!(windows) { "powershell.exe" } else { "bash" }.into(),

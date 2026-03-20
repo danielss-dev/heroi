@@ -104,5 +104,6 @@ export const AGENT_KNOWN_FLAGS: Record<string, FlagDef[]> = {
     },
   ],
   gemini: [],
+  aider: [],
   shell: [],
 };

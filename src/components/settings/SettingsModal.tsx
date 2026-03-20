@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type { Settings } from "../../types";
 import { useAppStore } from "../../stores/useAppStore";
 import { saveSettings } from "../../lib/tauri";
@@ -22,16 +22,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [section, setSection] = useState<Section>("general");
   const [draft, setDraft] = useState<Settings>(settings);
 
-  // Reset draft when modal opens
-  const handleOpen = useCallback(() => {
+  useEffect(() => {
+    if (!open) return;
     setDraft(settings);
     setSection("general");
-  }, [settings]);
-
-  // Reset draft when settings change externally and modal opens
-  if (open && draft === null) {
-    handleOpen();
-  }
+  }, [open, settings]);
 
   const updateDraft = (partial: Partial<Settings>) => {
     setDraft((prev) => ({ ...prev, ...partial }));

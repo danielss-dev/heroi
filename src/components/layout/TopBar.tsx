@@ -11,9 +11,16 @@ import { Button } from "../ui/Button";
 import { openInIde } from "../../lib/tauri";
 import { useScripts } from "../../hooks/useScripts";
 import type { IdeType } from "../../types";
+import { pathBasename } from "../../lib/path";
+
+const OPEN_FOLDER_LABEL = navigator.platform.includes("Win")
+  ? "Explorer"
+  : navigator.platform.includes("Mac")
+    ? "Finder"
+    : "Files";
 
 const OPEN_OPTIONS: { id: IdeType; label: string; shortcut?: string }[] = [
-  { id: "finder", label: "Finder" },
+  { id: "finder", label: OPEN_FOLDER_LABEL },
   { id: "cursor", label: "Cursor" },
   { id: "vscode", label: "VS Code" },
   { id: "zed", label: "Zed" },
@@ -77,9 +84,7 @@ export function TopBar() {
   };
 
   // Truncate the path to show just the last directory name
-  const shortPath = selectedWorktree
-    ? "/" + selectedWorktree.path.split("/").filter(Boolean).slice(-1)[0]
-    : "";
+  const shortPath = selectedWorktree ? `/${pathBasename(selectedWorktree.path)}` : "";
 
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--color-panel-bg)] border-b border-[var(--color-panel-border)]">

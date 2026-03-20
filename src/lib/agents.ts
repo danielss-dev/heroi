@@ -58,6 +58,13 @@ export function buildAgents(shellType: ShellType): AgentDef[] {
       description: "Google Gemini CLI agent",
     },
     {
+      id: "aider",
+      name: "Aider",
+      command: shell.command,
+      args: agentShellArgs(shell, "aider"),
+      description: "Aider AI pair programming CLI",
+    },
+    {
       id: "shell",
       name: "Shell",
       command: shell.command,

@@ -49,6 +49,30 @@ function escapeShellArg(s: string): string {
   return s.replace(/'/g, "'\\''");
 }
 
+function buildPromptCommand(
+  agentId: string,
+  prompt: string,
+  mode: "plan" | "dev" | "review"
+): string {
+  const escapedPrompt = escapeShellArg(prompt);
+
+  switch (agentId) {
+    case "claude": {
+      const base =
+        mode === "plan"
+          ? "claude --dangerously-skip-permissions --print"
+          : "claude --dangerously-skip-permissions";
+      return `${base} -p '${escapedPrompt}'`;
+    }
+    case "codex":
+      return `codex --full-auto -p '${escapedPrompt}'`;
+    case "aider":
+      return `aider --yes --message '${escapedPrompt}'`;
+    default:
+      return `${agentId} -p '${escapedPrompt}'`;
+  }
+}
+
 /** Extract JSON from markdown code fences or raw JSON */
 function parseJsonFromOutput(output: string): unknown | null {
   // Try to find JSON in ```json ... ``` fences
@@ -100,21 +124,6 @@ function stripAnsi(s: string): string {
       // Carriage returns
       .replace(/\r/g, "")
   );
-}
-
-/**
- * Build the CLI command string for an agent in orchestrate auto mode.
- * Adds --dangerously-skip-permissions for claude, --full-auto for codex, etc.
- */
-function getAutoModeCommand(agentId: string): string {
-  switch (agentId) {
-    case "claude":
-      return "claude --dangerously-skip-permissions";
-    case "codex":
-      return "codex --full-auto";
-    default:
-      return agentId;
-  }
 }
 
 /** Known prompt patterns that indicate the agent is waiting for user input */
@@ -299,13 +308,9 @@ class OrchestrateEngine {
     // Build the planning prompt
     const prompt = this.buildPlanPrompt(orchestration);
     const shell = getShell();
-    const escapedPrompt = escapeShellArg(prompt);
-    const agentCmd = orchestration.planAgentId === "claude"
-      ? "claude --dangerously-skip-permissions --print"
-      : orchestration.planAgentId;
     const args = agentShellArgs(
       shell,
-      `${agentCmd} -p '${escapedPrompt}'`
+      buildPromptCommand(orchestration.planAgentId, prompt, "plan")
     );
 
     spawnInSession(session, shell.command, args, orchestration.planAgentId, orchestration.envSnapshot);
@@ -534,13 +539,14 @@ Break the feature into logical, independently implementable tasks.`,
 
     // Spawn the agent with the task prompt
     const shell = getShell();
-    const agentCommand = orchestration.devAgentId === "shell" ? "" : getAutoModeCommand(orchestration.devAgentId);
-    if (!agentCommand) {
+    if (orchestration.devAgentId === "shell") {
       spawnInSession(session, shell.command, [...shell.args], "shell", orchestration.envSnapshot);
     } else {
       const prompt = this.buildDevPrompt(nextTask, orchestration);
-      const escapedPrompt = escapeShellArg(prompt);
-      const args = agentShellArgs(shell, `${agentCommand} -p '${escapedPrompt}'`);
+      const args = agentShellArgs(
+        shell,
+        buildPromptCommand(orchestration.devAgentId, prompt, "dev")
+      );
       spawnInSession(session, shell.command, args, orchestration.devAgentId, orchestration.envSnapshot);
     }
   }
@@ -720,11 +726,9 @@ Break the feature into logical, independently implementable tasks.`,
     // Use interactive mode so the review agent can run git diff itself
     const prompt = this.buildReviewPrompt(orchestration);
     const shell = getShell();
-    const escapedPrompt = escapeShellArg(prompt);
-    const reviewCmd = getAutoModeCommand(orchestration.reviewAgentId);
     const args = agentShellArgs(
       shell,
-      `${reviewCmd} -p '${escapedPrompt}'`
+      buildPromptCommand(orchestration.reviewAgentId, prompt, "review")
     );
 
     spawnInSession(session, shell.command, args, orchestration.reviewAgentId, orchestration.envSnapshot);

@@ -7,6 +7,7 @@ import { useOrchestrateStore } from "../../stores/useOrchestrateStore";
 import { engine } from "../../lib/orchestrateEngine";
 import { listBranches, getDefaultBranch, createWorkspaceWithWorktree, copyFile, writeBinaryFile } from "../../lib/tauri";
 import type { BranchInfo } from "../../types";
+import { pathBasename } from "../../lib/path";
 
 interface AttachedImage {
   id: string;
@@ -105,7 +106,7 @@ export function OrchestrateCreator() {
       const paths = Array.isArray(selected) ? selected : [selected];
       const newImages: AttachedImage[] = paths.map((p) => ({
         id: crypto.randomUUID(),
-        name: p.replace(/\\/g, "/").split("/").pop() ?? "image",
+        name: pathBasename(p),
         previewUrl: "",
         sourcePath: p,
       }));

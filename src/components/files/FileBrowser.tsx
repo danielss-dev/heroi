@@ -13,6 +13,7 @@ import {
 import { useAppStore } from "../../stores/useAppStore";
 import { listDirectory, readFile } from "../../lib/tauri";
 import type { DirEntry, FileContent, FileType } from "../../types";
+import { relativeDisplayPath } from "../../lib/path";
 
 function getFileIcon(fileType: FileType, isDir: boolean) {
   if (isDir) return Folder;
@@ -183,7 +184,7 @@ export function FileBrowser() {
           <div className="flex flex-col h-full">
             <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
               <span className="text-xs text-zinc-400 font-mono truncate">
-                {fileContent.path.replace(selectedWorktree?.path + "/", "")}
+                {relativeDisplayPath(fileContent.path, selectedWorktree?.path)}
               </span>
               <span className="text-[10px] text-zinc-600 shrink-0">
                 {formatSize(fileContent.size)} &middot; {fileContent.file_type}

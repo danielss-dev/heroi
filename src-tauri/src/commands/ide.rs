@@ -3,10 +3,20 @@ use std::process::Command;
 #[tauri::command]
 pub fn open_in_ide(worktree_path: String, ide: String) -> Result<(), String> {
     if ide == "finder" {
-        Command::new("open")
+        let (program, args): (&str, Vec<&str>) = if cfg!(target_os = "windows") {
+            ("explorer", Vec::new())
+        } else if cfg!(target_os = "macos") {
+            ("open", Vec::new())
+        } else {
+            ("xdg-open", Vec::new())
+        };
+
+        let mut command = Command::new(program);
+        command.args(&args);
+        command
             .arg(&worktree_path)
             .spawn()
-            .map_err(|e| format!("Failed to open Finder: {}", e))?;
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
         return Ok(());
     }
 

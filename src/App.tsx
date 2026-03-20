@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { AppLayout } from "./components/layout/AppLayout";
 import { useAppStore } from "./stores/useAppStore";
 import { useOrchestrateStore } from "./stores/useOrchestrateStore";
-import { listAgents, loadSettings, loadWorkspaces } from "./lib/tauri";
-import { DEFAULT_AGENTS, buildAgents } from "./lib/agents";
+import { loadSettings, loadWorkspaces } from "./lib/tauri";
+import { buildAgents } from "./lib/agents";
 import { DEFAULT_SETTINGS } from "./lib/constants";
 import type { LegacyWorkspace, Workspace } from "./types";
 
@@ -49,56 +49,54 @@ function App() {
   const setActiveWorkspaceId = useAppStore((s) => s.setActiveWorkspaceId);
 
   useEffect(() => {
-    listAgents()
-      .then(setAgents)
-      .catch(() => {
-        setAgents(DEFAULT_AGENTS);
-      });
+    let cancelled = false;
 
-    loadSettings()
-      .then((stored) => {
-        if (stored) {
-          const merged = { ...DEFAULT_SETTINGS, ...stored };
-          setSettings(merged);
-          // Rebuild agents with the configured shell
-          if (merged.defaultShell) {
-            setAgents(buildAgents(merged.defaultShell));
+    const initialize = async () => {
+      try {
+        const stored = await loadSettings();
+        if (cancelled) return;
+
+        const merged = stored ? { ...DEFAULT_SETTINGS, ...stored } : DEFAULT_SETTINGS;
+        setSettings(merged);
+        setAgents(buildAgents(merged.defaultShell));
+      } catch {
+        if (cancelled) return;
+        setSettings(DEFAULT_SETTINGS);
+        setAgents(buildAgents(DEFAULT_SETTINGS.defaultShell));
+      }
+
+      try {
+        const data = await loadWorkspaces();
+        if (cancelled || !data.workspaces || data.workspaces.length === 0) return;
+
+        const workspaces = data.workspaces.map((ws) => {
+          if (isLegacyWorkspace(ws)) {
+            return migrateLegacyWorkspace(ws);
+          }
+          return ws as Workspace;
+        });
+
+        setWorkspaces(workspaces);
+        setActiveWorkspaceId(data.activeWorkspaceId);
+
+        const activeId = data.activeWorkspaceId;
+        if (activeId) {
+          const activeWs = workspaces.find((w) => w.id === activeId);
+          if (activeWs) {
+            useAppStore.getState().loadWorkspaceState(activeWs);
           }
         }
-      })
-      .catch(() => {
-        // Use defaults on error
-      });
+      } catch {
+        // The UI will create the first workspace on demand.
+      }
+    };
 
-    // Load persisted orchestrations
     useOrchestrateStore.getState().loadFromDisk();
+    void initialize();
 
-    loadWorkspaces()
-      .then((data) => {
-        if (data.workspaces && data.workspaces.length > 0) {
-          // Check if workspaces need migration from legacy format
-          const workspaces = data.workspaces.map((ws) => {
-            if (isLegacyWorkspace(ws)) {
-              return migrateLegacyWorkspace(ws);
-            }
-            return ws as Workspace;
-          });
-          setWorkspaces(workspaces);
-          setActiveWorkspaceId(data.activeWorkspaceId);
-
-          // Auto-load the active workspace's state
-          const activeId = data.activeWorkspaceId;
-          if (activeId) {
-            const activeWs = workspaces.find((w) => w.id === activeId);
-            if (activeWs) {
-              useAppStore.getState().loadWorkspaceState(activeWs);
-            }
-          }
-        }
-      })
-      .catch(() => {
-        // Will create default workspace from the UI
-      });
+    return () => {
+      cancelled = true;
+    };
   }, [setAgents, setSettings, setWorkspaces, setActiveWorkspaceId]);
 
   return <AppLayout />;

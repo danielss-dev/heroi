@@ -6,7 +6,7 @@ import { spawn } from "tauri-pty";
 import type { IPty } from "tauri-pty";
 import "@xterm/xterm/css/xterm.css";
 import { useAppStore } from "../../stores/useAppStore";
-import { getAgentById, getAgentArgs } from "../../lib/agents";
+import { getAgentById, getAgentArgs, resolveShell, agentShellArgs } from "../../lib/agents";
 import { notifyOutput, notifyExit, removeAllListeners } from "../../lib/terminalMonitor";
 
 // ---------------------------------------------------------------------------
@@ -416,9 +416,9 @@ export function XtermTerminal() {
       state.setActiveTab(worktreePath, shellTab.id);
       showSession(shellTab.id);
 
-      // Parse command into program + args for the shell
-      // We run via the user's shell so env is inherited
-      spawnInSession(session, "/bin/sh", ["-c", detail.command], "shell");
+      const shell = resolveShell(state.settings.defaultShell);
+      const args = agentShellArgs(shell, detail.command);
+      spawnInSession(session, shell.command, args, "shell");
     };
 
     window.addEventListener("heroi:run-app", handler);
