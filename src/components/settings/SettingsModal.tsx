@@ -7,8 +7,9 @@ import { Modal } from "../ui/Modal";
 import { GeneralSettings } from "./GeneralSettings";
 import { AgentSettings } from "./AgentSettings";
 import { ProviderSettings } from "./ProviderSettings";
+import { AboutSection } from "./AboutSection";
 
-type Section = "general" | "agents" | "providers";
+type Section = "general" | "agents" | "providers" | "about";
 
 interface SettingsModalProps {
   open: boolean;
@@ -57,6 +58,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     { id: "general", label: "General" },
     { id: "agents", label: "Agent Parameters" },
     { id: "providers", label: "AI Providers" },
+    { id: "about", label: "About" },
   ];
 
   return (
@@ -88,6 +90,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           {section === "providers" && (
             <ProviderSettings draft={draft} onChange={updateDraft} />
           )}
+          {section === "about" && <AboutSection settings={draft} />}
         </div>
       </div>
 

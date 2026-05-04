@@ -101,3 +101,14 @@ export function getAgentArgs(agent: AgentDef, settings: Settings): string[] {
 
   return [...agent.args, ...flagArgs, ...extraArgs];
 }
+
+/**
+ * Whether an agent can receive structured inline-comment payloads as MCP
+ * tool calls. Falls back to a synthesized stdin prompt when false.
+ */
+export function getAgentSupportsStructuredComments(
+  agentId: string,
+  _settings: Settings
+): boolean {
+  return agentId === "claude";
+}

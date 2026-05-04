@@ -19,7 +19,31 @@ import type {
   DirEntry,
   FileContent,
   Checkpoint,
+  Project,
+  Conversation,
+  ConversationStatus,
+  InlineComment,
+  InlineCommentSide,
+  ProjectCommand,
+  CommandVariable,
+  ProjectVariableAdvisoryEntry,
+  TerminalScrollback,
+  MigrationPayloadV2,
 } from "../types";
+
+export type DeliveryMode = "structured" | "synthesized";
+
+export type TerminalRunStatus = "running" | "exited";
+
+export interface TerminalSummary {
+  conversationId: string;
+  status: TerminalRunStatus;
+  pid: number | null;
+}
+
+export type WorkingDirChoice =
+  | { kind: "primary" }
+  | { kind: "worktree"; branchName: string; baseBranch?: string };
 
 export async function addRepo(path: string): Promise<RepoEntry> {
   return invoke("add_repo", { path });
@@ -407,4 +431,256 @@ export async function diffCheckpoint(
   toRef?: string
 ): Promise<string> {
   return invoke("diff_checkpoint", { worktreePath, fromRef, toRef });
+}
+
+// =============================================================================
+// Foundation v2: schema version, migration, projects, conversations
+// =============================================================================
+
+export async function getSchemaVersion(): Promise<number> {
+  return invoke("get_schema_version");
+}
+
+export async function migrateToV2(payload: MigrationPayloadV2): Promise<void> {
+  return invoke("migrate_to_v2", { payload });
+}
+
+export async function listProjects(): Promise<Project[]> {
+  return invoke("list_projects");
+}
+
+export async function listConversations(
+  projectId?: string
+): Promise<Conversation[]> {
+  return invoke("list_conversations", { projectId });
+}
+
+export async function addProject(
+  repoPath: string,
+  name?: string
+): Promise<Project> {
+  return invoke("add_project", { repoPath, name });
+}
+
+export async function renameProject(
+  projectId: string,
+  name: string
+): Promise<void> {
+  return invoke("rename_project", { projectId, name });
+}
+
+export async function archiveProject(projectId: string): Promise<void> {
+  return invoke("archive_project", { projectId });
+}
+
+export async function restoreProject(projectId: string): Promise<void> {
+  return invoke("restore_project", { projectId });
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  return invoke("delete_project", { projectId });
+}
+
+export async function createConversation(
+  projectId: string,
+  name: string,
+  agentId: string,
+  workingDirChoice: WorkingDirChoice
+): Promise<Conversation> {
+  return invoke("create_conversation", {
+    projectId,
+    name,
+    agentId,
+    workingDirChoice,
+  });
+}
+
+export async function deleteConversation(
+  conversationId: string
+): Promise<void> {
+  return invoke("delete_conversation", { conversationId });
+}
+
+export async function archiveConversation(
+  conversationId: string
+): Promise<void> {
+  return invoke("archive_conversation", { conversationId });
+}
+
+export async function restoreConversation(
+  conversationId: string
+): Promise<void> {
+  return invoke("restore_conversation", { conversationId });
+}
+
+export async function setConversationStatus(
+  conversationId: string,
+  status: ConversationStatus
+): Promise<void> {
+  return invoke("set_conversation_status", { conversationId, status });
+}
+
+export async function getConversationEnv(
+  conversationId: string
+): Promise<Record<string, string>> {
+  return invoke("get_conversation_env", { conversationId });
+}
+
+// Persistent PTY-backed terminal sessions (per conversation).
+//
+// Events emitted by the backend:
+//   `terminal://${conversationId}/data` payload: string (UTF-8 chunk)
+//   `terminal://${conversationId}/exit` payload: number (exit code)
+
+export async function terminalSpawn(
+  conversationId: string,
+  command: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string>,
+  cols: number,
+  rows: number
+): Promise<TerminalSummary> {
+  return invoke("terminal_spawn", {
+    conversationId,
+    command,
+    args,
+    cwd,
+    env,
+    cols,
+    rows,
+  });
+}
+
+export async function terminalInput(
+  conversationId: string,
+  data: string
+): Promise<void> {
+  return invoke("terminal_input", { conversationId, data });
+}
+
+export async function terminalResize(
+  conversationId: string,
+  cols: number,
+  rows: number
+): Promise<void> {
+  return invoke("terminal_resize", { conversationId, cols, rows });
+}
+
+export async function terminalKill(conversationId: string): Promise<void> {
+  return invoke("terminal_kill", { conversationId });
+}
+
+export async function terminalLoadScrollback(
+  conversationId: string
+): Promise<TerminalScrollback | null> {
+  return invoke("terminal_load_scrollback", { conversationId });
+}
+
+export async function listTerminals(): Promise<TerminalSummary[]> {
+  return invoke("list_terminals");
+}
+
+// Inline review comments
+
+export async function listInlineComments(
+  conversationId: string
+): Promise<InlineComment[]> {
+  return invoke("list_inline_comments", { conversationId });
+}
+
+export interface InlineCommentDraftInput {
+  conversationId: string;
+  filePath: string;
+  side: InlineCommentSide;
+  lineNumber: number;
+  body: string;
+}
+
+export async function addInlineComment(
+  draft: InlineCommentDraftInput
+): Promise<InlineComment> {
+  return invoke("add_inline_comment", { draft });
+}
+
+export async function updateInlineComment(
+  commentId: string,
+  body: string
+): Promise<InlineComment> {
+  return invoke("update_inline_comment", { commentId, body });
+}
+
+export async function deleteInlineComment(commentId: string): Promise<void> {
+  return invoke("delete_inline_comment", { commentId });
+}
+
+export async function shipInlineComments(
+  conversationId: string,
+  deliveryMode: DeliveryMode
+): Promise<InlineComment[]> {
+  return invoke("ship_inline_comments", { conversationId, deliveryMode });
+}
+
+export async function markCommentResolved(
+  commentId: string
+): Promise<InlineComment> {
+  return invoke("mark_comment_resolved", { commentId });
+}
+
+// Project commands
+
+export async function listProjectCommands(
+  projectId: string
+): Promise<ProjectCommand[]> {
+  return invoke("list_project_commands", { projectId });
+}
+
+export interface UpsertProjectCommandInput {
+  id?: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  shellTemplate: string;
+  cwdRelative?: string;
+  variables: CommandVariable[];
+  isAgentRunnable: boolean;
+}
+
+export async function upsertProjectCommand(
+  input: UpsertProjectCommandInput
+): Promise<ProjectCommand> {
+  return invoke("upsert_project_command", { input });
+}
+
+export async function deleteProjectCommand(commandId: string): Promise<void> {
+  return invoke("delete_project_command", { commandId });
+}
+
+export interface RunProjectCommandResult {
+  runId: string;
+  commandText: string;
+}
+
+export async function runProjectCommand(
+  conversationId: string,
+  commandId: string,
+  resolvedVars: Record<string, string>
+): Promise<RunProjectCommandResult> {
+  return invoke("run_project_command", {
+    conversationId,
+    commandId,
+    resolvedVars,
+  });
+}
+
+export async function listProjectVarAdvisory(
+  projectId: string
+): Promise<ProjectVariableAdvisoryEntry[]> {
+  return invoke("list_project_var_advisory", { projectId });
+}
+
+// MCP server discovery
+
+export async function getMcpPort(): Promise<number | null> {
+  return invoke("get_mcp_port");
 }

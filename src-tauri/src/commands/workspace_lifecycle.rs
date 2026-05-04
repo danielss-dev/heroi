@@ -1,19 +1,25 @@
+//! DEPRECATED — superseded by `commands::projects` + `commands::conversations`
+//! in foundation v2 (schema_version = 2). The functions in this module remain
+//! registered so the legacy orchestration engine and one-time migration paths
+//! keep working; they will be removed in milestone 2 once the new model has
+//! soaked in real use. Do not call from new code.
+#![allow(deprecated)]
+
 use std::collections::HashMap;
-use std::net::TcpListener;
 use std::path::Path;
 use std::process::Command;
 
 use tauri::State;
 use tauri_plugin_store::StoreExt;
 
+use crate::commands::ports::allocate_port_range;
+use crate::commands::util::{gen_id, now_iso8601};
 use crate::models::workspace::{WorkspaceConfig, WorkspaceStatus};
 use crate::state::AppState;
 
-const PORT_RANGE_SIZE: u16 = 10;
-const PORT_START: u16 = 3000;
-const PORT_MAX: u16 = 65000;
 
 #[tauri::command]
+#[deprecated(note = "use commands::conversations::create_conversation")]
 pub fn create_workspace(
     repo_path: String,
     name: String,
@@ -76,7 +82,7 @@ pub fn create_workspace(
     env_vars.insert("HEROI_WORKSPACE_NAME".to_string(), name.clone());
 
     let workspace = WorkspaceConfig {
-        id: uuid_v4(),
+        id: gen_id(),
         name,
         repo_path,
         worktree_path,
@@ -101,6 +107,7 @@ pub fn create_workspace(
 }
 
 #[tauri::command]
+#[deprecated(note = "use commands::conversations::create_conversation with kind=primary")]
 pub fn create_workspace_for_main(
     repo_path: String,
     name: String,
@@ -140,7 +147,7 @@ pub fn create_workspace_for_main(
     env_vars.insert("HEROI_WORKSPACE_NAME".to_string(), name.clone());
 
     let workspace = WorkspaceConfig {
-        id: uuid_v4(),
+        id: gen_id(),
         name,
         repo_path,
         worktree_path: main_path_clean,
@@ -165,6 +172,7 @@ pub fn create_workspace_for_main(
 }
 
 #[tauri::command]
+#[deprecated(note = "use commands::conversations::delete_conversation")]
 pub fn delete_workspace(
     workspace_id: String,
     app: tauri::AppHandle,
@@ -241,6 +249,7 @@ pub fn delete_workspace(
 }
 
 #[tauri::command]
+#[deprecated(note = "use commands::conversations::get_conversation_env")]
 pub fn get_workspace_env(
     workspace_id: String,
     state: State<'_, AppState>,
@@ -257,6 +266,7 @@ pub fn get_workspace_env(
 }
 
 #[tauri::command]
+#[deprecated(note = "kept solely so the v1→v2 migration can read legacy workspace_configs")]
 pub fn list_workspace_configs(
     state: State<'_, AppState>,
 ) -> Result<Vec<WorkspaceConfig>, String> {
@@ -265,6 +275,7 @@ pub fn list_workspace_configs(
 }
 
 #[tauri::command]
+#[deprecated(note = "use commands::conversations::archive_conversation")]
 pub fn archive_workspace(
     workspace_id: String,
     app: tauri::AppHandle,
@@ -288,6 +299,7 @@ pub fn archive_workspace(
 }
 
 #[tauri::command]
+#[deprecated(note = "use commands::conversations::restore_conversation")]
 pub fn restore_workspace(
     workspace_id: String,
     app: tauri::AppHandle,
@@ -342,24 +354,6 @@ pub fn load_workspace_notes(
     Ok(notes)
 }
 
-fn allocate_port_range(
-    allocated: &std::collections::HashSet<u16>,
-) -> Result<u16, String> {
-    let mut port = PORT_START;
-    while port < PORT_MAX {
-        if !allocated.contains(&port) && is_port_range_available(port) {
-            return Ok(port);
-        }
-        port += PORT_RANGE_SIZE;
-    }
-    Err("No available port range found".into())
-}
-
-fn is_port_range_available(base: u16) -> bool {
-    // Just check the base port — checking all 10 would be slow
-    TcpListener::bind(("127.0.0.1", base)).is_ok()
-}
-
 fn persist_workspaces(
     app: &tauri::AppHandle,
     workspaces: &[WorkspaceConfig],
@@ -375,6 +369,7 @@ fn persist_workspaces(
     Ok(())
 }
 
+#[deprecated(note = "kept for v1→v2 migration; new code should use commands::conversations")]
 pub fn load_workspace_configs(
     app: &tauri::AppHandle,
     state: &AppState,
@@ -394,72 +389,3 @@ pub fn load_workspace_configs(
     Ok(())
 }
 
-fn uuid_v4() -> String {
-    // Simple UUID v4 using random bytes
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let seed = now.as_nanos();
-    format!(
-        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
-        (seed & 0xFFFF_FFFF) as u32,
-        ((seed >> 32) & 0xFFFF) as u16,
-        ((seed >> 48) & 0x0FFF) as u16,
-        (((seed >> 60) & 0x3F) | 0x80) as u16 | (((seed >> 66) & 0xFF) as u16) << 8,
-        (seed >> 74) & 0xFFFF_FFFF_FFFF,
-    )
-}
-
-pub fn now_iso8601_pub() -> String {
-    now_iso8601()
-}
-
-fn now_iso8601() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let secs = duration.as_secs();
-    // Simple ISO 8601 without external deps
-    let days = secs / 86400;
-    let time_secs = secs % 86400;
-    let hours = time_secs / 3600;
-    let minutes = (time_secs % 3600) / 60;
-    let seconds = time_secs % 60;
-
-    // Approximate date calculation (good enough for display)
-    let mut y = 1970i64;
-    let mut remaining_days = days as i64;
-    loop {
-        let days_in_year = if is_leap(y) { 366 } else { 365 };
-        if remaining_days < days_in_year {
-            break;
-        }
-        remaining_days -= days_in_year;
-        y += 1;
-    }
-    let months_days: Vec<i64> = if is_leap(y) {
-        vec![31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    } else {
-        vec![31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    };
-    let mut m = 1;
-    for md in &months_days {
-        if remaining_days < *md {
-            break;
-        }
-        remaining_days -= md;
-        m += 1;
-    }
-    let d = remaining_days + 1;
-
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        y, m, d, hours, minutes, seconds
-    )
-}
-
-fn is_leap(y: i64) -> bool {
-    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
-}

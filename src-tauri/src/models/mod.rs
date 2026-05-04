@@ -1,8 +1,14 @@
 pub mod agent;
 pub mod checkpoint;
+pub mod conversation;
 pub mod file;
 pub mod git;
 pub mod github;
+pub mod inline_comment;
+pub mod mcp;
+pub mod project;
+pub mod project_command;
 pub mod repo;
 pub mod scripts;
+pub mod terminal_scrollback;
 pub mod workspace;

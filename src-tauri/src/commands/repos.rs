@@ -68,7 +68,7 @@ pub fn list_repos(state: State<'_, AppState>) -> Result<Vec<RepoEntry>, String> 
     Ok(data.repos.clone())
 }
 
-fn persist_repos(app: &tauri::AppHandle, repos: &[RepoEntry]) -> Result<(), String> {
+pub(crate) fn persist_repos(app: &tauri::AppHandle, repos: &[RepoEntry]) -> Result<(), String> {
     let store = app.store("heroi-store.json").map_err(|e| e.to_string())?;
     store.set(
         "repos",

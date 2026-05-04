@@ -4,14 +4,17 @@ import {
   FolderOpen,
   ScrollText,
 } from "lucide-react";
-import { RepoSidebar } from "../sidebar/RepoSidebar";
+import { ProjectSidebar } from "../sidebar/ProjectSidebar";
 import { TopBar } from "./TopBar";
 import { TerminalPanel } from "../terminal/TerminalPanel";
+import { ConversationTerminal } from "../terminal/ConversationTerminal";
 import { GitSidebar } from "../git/GitSidebar";
+import { ReviewPane } from "../review/ReviewPane";
 import { RunPanel } from "../scripts/RunPanel";
 import { FileBrowser } from "../files/FileBrowser";
 import { OrchestrateView } from "../orchestrate/OrchestrateView";
 import { useAppStore } from "../../stores/useAppStore";
+import { useConversationStore } from "../../stores/useConversationStore";
 import { useOrchestrateStore } from "../../stores/useOrchestrateStore";
 import type { RightPanel } from "../../stores/useAppStore";
 
@@ -36,6 +39,12 @@ export function AppLayout() {
   } = useAppStore();
 
   const showOrchestrateView = useOrchestrateStore((s) => s.showOrchestrateView);
+
+  const selectedConversation = useConversationStore((s) =>
+    s.selectedConversationId
+      ? s.conversations.find((c) => c.id === s.selectedConversationId) ?? null
+      : null
+  );
 
   const draggingRef = useRef<"left" | "right" | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +92,7 @@ export function AppLayout() {
     <div ref={containerRef} className="flex h-screen w-screen overflow-hidden">
       {/* Left Panel */}
       <div style={{ width: leftPanelWidth }} className="shrink-0 h-full">
-        <RepoSidebar />
+        <ProjectSidebar />
       </div>
 
       {/* Left Resize Handle */}
@@ -100,7 +109,14 @@ export function AppLayout() {
           <>
             <TopBar />
             <div className="flex-1 min-h-0 flex flex-col">
-              <TerminalPanel />
+              {selectedConversation ? (
+                <ConversationTerminal
+                  key={selectedConversation.id}
+                  conversation={selectedConversation}
+                />
+              ) : (
+                <TerminalPanel />
+              )}
             </div>
           </>
         )}
@@ -137,7 +153,15 @@ export function AppLayout() {
 
         {/* Right Panel Content */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          {rightPanel === "git" && <GitSidebar />}
+          {rightPanel === "git" &&
+            (selectedConversation ? (
+              <ReviewPane
+                key={selectedConversation.id}
+                conversation={selectedConversation}
+              />
+            ) : (
+              <GitSidebar />
+            ))}
           {rightPanel === "files" && <FileBrowser />}
           {rightPanel === "scripts" && <RunPanel />}
         </div>

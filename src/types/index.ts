@@ -209,3 +209,126 @@ export interface LegacyWorkspace {
   leftPanelWidth: number;
   rightPanelWidth: number;
 }
+
+// =============================================================================
+// Agentic IDE foundation (schema v2)
+// =============================================================================
+
+export const HEROI_SCHEMA_VERSION = 2;
+
+export interface Project {
+  id: string;
+  name: string;
+  repoPath: string;
+  primaryCheckoutPath: string;
+  defaultBaseBranch: string;
+  createdAt: string;
+  archivedAt?: string;
+}
+
+export type ConversationMode = "chat" | "kanban";
+export type WorkingDirKind = "primary" | "worktree";
+
+export interface ConversationWorkingDir {
+  kind: WorkingDirKind;
+  path: string;
+  branch: string | null;
+  baseBranch: string;
+  worktreeName?: string;
+  portBase?: number;
+}
+
+export type ConversationStatus = "idle" | "running" | "exited";
+
+export interface Conversation {
+  id: string;
+  projectId: string;
+  name: string;
+  agentId: string;
+  mode: ConversationMode;
+  workingDir: ConversationWorkingDir;
+  envVars: Record<string, string>;
+  status: ConversationStatus;
+  createdAt: string;
+  archivedAt?: string;
+  commandVarCache: Record<string, Record<string, string>>;
+}
+
+export type CommandVariableScope = "conversation" | "project";
+
+export interface CommandVariable {
+  name: string;
+  description: string;
+  defaultValue?: string;
+  scope: CommandVariableScope;
+}
+
+export interface ProjectCommand {
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  shellTemplate: string;
+  cwdRelative?: string;
+  variables: CommandVariable[];
+  isAgentRunnable: boolean;
+}
+
+export interface ProjectVariableAdvisoryEntry {
+  variableName: string;
+  lastValue: string;
+  lastUsedAt: string;
+  inUseByConversationIds: string[];
+}
+
+export type InlineCommentSide = "old" | "new";
+export type InlineCommentStatus = "draft" | "shipped" | "resolved";
+
+export interface InlineComment {
+  id: string;
+  conversationId: string;
+  filePath: string;
+  side: InlineCommentSide;
+  lineNumber: number;
+  body: string;
+  status: InlineCommentStatus;
+  createdAt: string;
+  shippedAt?: string;
+  resolvedAt?: string;
+}
+
+export interface TerminalScrollback {
+  conversationId: string;
+  ringBuffer: string;
+  cols: number;
+  rows: number;
+  cwdAtSpawn: string;
+  agentId: string;
+  capturedAt: string;
+}
+
+// Payload sent by frontend migration to the backend migrate_to_v2 command.
+export interface MigrationPayloadV2 {
+  schemaVersion: typeof HEROI_SCHEMA_VERSION;
+  projects: Project[];
+  conversations: Conversation[];
+}
+
+// MCP event surface (heroi://mcp/event)
+
+export type McpEventLevel = "info" | "warn" | "error" | string;
+
+export interface McpPostStatusEvent {
+  type: "post_status";
+  conversation_id: string;
+  text: string;
+  level: McpEventLevel;
+}
+
+export interface McpCommentResolvedEvent {
+  type: "comment_resolved";
+  conversation_id: string;
+  comment_id: string;
+}
+
+export type McpEvent = McpPostStatusEvent | McpCommentResolvedEvent;

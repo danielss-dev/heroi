@@ -59,7 +59,7 @@ pub fn create_checkpoint(
         workspace_id,
         label,
         git_ref,
-        created_at: crate::commands::workspace_lifecycle::now_iso8601_pub(),
+        created_at: crate::commands::util::now_iso8601(),
         file_count,
         agent_id,
     };
