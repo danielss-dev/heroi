@@ -14,6 +14,7 @@ import { useAppStore } from "../../stores/useAppStore";
 import { listDirectory, readFile } from "../../lib/tauri";
 import type { DirEntry, FileContent, FileType } from "../../types";
 import { relativeDisplayPath } from "../../lib/path";
+import { MarkdownPreview } from "./MarkdownPreview";
 
 function getFileIcon(fileType: FileType, isDir: boolean) {
   if (isDir) return Folder;
@@ -203,6 +204,8 @@ export function FileBrowser() {
                     Binary file ({formatSize(fileContent.size)})
                   </div>
                 </div>
+              ) : fileContent.file_type === "Markdown" ? (
+                <MarkdownPreview content={fileContent.content} />
               ) : (
                 <pre className="p-3 text-xs text-zinc-300 font-mono whitespace-pre-wrap break-words leading-relaxed">
                   {fileContent.content}
