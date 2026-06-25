@@ -55,3 +55,139 @@ body,
   height: 100%;
   padding: 8px;
 }
+
+.markdown-preview {
+  padding: 0.75rem;
+  color: #d4d4d8;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  color: #f4f4f5;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content h1 {
+  font-size: 1.2rem;
+}
+
+.markdown-content h2 {
+  font-size: 1.05rem;
+}
+
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content blockquote,
+.markdown-content table {
+  margin: 0.5rem 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.1rem;
+}
+
+.markdown-content blockquote {
+  border-left: 2px solid #3f3f46;
+  margin-left: 0;
+  padding-left: 0.75rem;
+  color: #a1a1aa;
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid #3f3f46;
+  padding: 0.25rem 0.5rem;
+}
+
+.markdown-code-block {
+  background: #111113;
+  border: 1px solid #27272a;
+  border-radius: 0.5rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  padding: 0.75rem;
+}
+
+.markdown-inline-code {
+  background: #18181b;
+  border-radius: 0.25rem;
+  color: #e4e4e7;
+  padding: 0.1rem 0.3rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+}
+
+.markdown-code-block .markdown-inline-code {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+.markdown-link {
+  color: #818cf8;
+  text-decoration: underline;
+}
+
+.markdown-link:hover {
+  color: #a5b4fc;
+}
+
+.markdown-mermaid-block {
+  margin: 0.75rem 0;
+  border: 1px solid #27272a;
+  border-radius: 0.5rem;
+  background: #0f0f12;
+  overflow: auto;
+  padding: 0.5rem;
+}
+
+.markdown-mermaid-svg {
+  display: inline-flex;
+  min-width: 100%;
+  justify-content: center;
+}
+
+.markdown-mermaid-loading {
+  margin: 0.75rem 0;
+  border: 1px dashed #3f3f46;
+  border-radius: 0.5rem;
+  color: #a1a1aa;
+  padding: 0.75rem;
+}
+
+.markdown-mermaid-error {
+  border-color: #7f1d1d;
+}
+
+.markdown-mermaid-error-title {
+  color: #fca5a5;
+  font-size: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.markdown-mermaid-error-message {
+  margin: 0;
+  white-space: pre-wrap;
+  color: #f4f4f5;
+  font-size: 0.72rem;
+}
